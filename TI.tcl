@@ -363,6 +363,7 @@ proc readGDB {} {
 
 
 proc Z80readBody {datatype {fallbacksize 0}} {
+	global	Type
 	section	"Body"
 	set	start [pos]
 
