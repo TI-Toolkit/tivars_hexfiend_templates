@@ -1,4 +1,4 @@
-#TI-graphing calculator-related format HexFiend template[s]
+# TI-graphing calculator-related format HexFiend template[s]
 Version 1.0
 Template set by LogicalJoe
 
@@ -8,7 +8,7 @@ Template set by LogicalJoe
 This project is primarily meant for `.8x#` files but can read other files,
 though functionality is not guaranteed
 
-##installation
+## Installation
 
 hexFiend is avaliable [here](https://github.com/HexFiend/HexFiend).
 
@@ -17,6 +17,6 @@ hexFiend is avaliable [here](https://github.com/HexFiend/HexFiend).
 3. Copy this folder to the folder that is opened
 4. Select `TI` or `TI-flash` from the template list to use it
 
-##other stuff
+## Other stuff
 
 January 8, 2023 - First release I think.
