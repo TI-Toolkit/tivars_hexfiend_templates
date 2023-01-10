@@ -30,8 +30,14 @@ proc Field_Names {value} {
 		023	{ set x "CE signature"}
 		# 024 CE OSs
 		032	{ set x "Date stamp"}
+		033	{ set x "Certificate parent" }
+		034	{ set x "Exam LED avaliable" }
+		# 035 cert, value 030000
+		037	{ set x "Minimum installable OS" }
 		040	{ set x "Calculator ID"}
 		041	{ set x "Validation ID"}
+		042	{ set x "Model name" }
+		043	{ set x "Python co-processor" }
 		051	{ set x "About text"}
 		071	{ set x "Standard key header"}
 		073	{ set x "Standard key signature"}
@@ -41,6 +47,8 @@ proc Field_Names {value} {
 		0A0	{ set x "Calculator ID-related"}
 		0A1	{ set x "Calculator ID"}
 		0A2	{ set x "Validation key"}
+		0B0	{ set x "Default language" }
+		0C0	{ set x "Exam mode status" }
 		800	{ set x "Master"}
 		801	{ set x "Signing key"}
 		802	{ set x "Revision"}
