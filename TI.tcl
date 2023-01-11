@@ -95,7 +95,7 @@ set	Z80typeDict [dict create \
 	0x13 "Backup" \
 	0x15 "AppVar" \
 	0x17 "Group" \
-	0x18 "Fraction" \
+	0x18 "Real Fraction" \
 	0x1A "Image" \
 	0x1B "Complex Fraction" \
 	0x1C "Real radical" \
@@ -370,6 +370,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 	switch -- $datatype {
 		0x00 -
 		0x0C -
+		0x18 -
 		0x1B -
 		0x1C -
 		0x1D -
