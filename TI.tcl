@@ -75,6 +75,26 @@ proc for_n {n body} {
 	}
 }
 
+set	ProdIDs [dict create \
+	0x01 "TI-92 Plus" \
+	0x02 "TI-73" \
+	0x03 "TI-89" \
+	0x04 "TI-83 Plus" \
+	0x08 "TI-Voyage 200" \
+	0x09 "TI-89 Titanium" \
+	0x0A "TI-84 Plus" \
+	0x0B "TI-82 Advanced" \
+	0x0C "TI-Nspire CAS" \
+	0x0D "TI-Labcradle" \
+	0x0E "TI-Nspire" \
+	0x0F "TI-84 Plus CSE / Nspire CX CAS" \
+	0x10 "TI-Nspire CX" \
+	0x11 "TI-Nspire CM CAS" \
+	0x12 "TI-Nspire CM" \
+	0x13 "TI-84 Plus CE / TI-83 Premium CE" \
+	0x1B "TI-84 Plus T" \
+]
+
 set	Z80typeDict [dict create \
 	0x00 "Real" \
 	0x01 "Real list" \
@@ -167,6 +187,16 @@ array set Type {
 
 
 proc readTINumb {{index ""}} {
+	proc FlagRead {Flag bit {name unused/unknown} {notname -1}} {
+		if {($Flag & (1 << $bit)) != 0} {
+			if {$name != -1} {
+				entry $name "" 1 [expr [pos] - 1]
+			}
+		} elseif {$notname != -1} {
+			entry $notname "" 1 [expr [pos] - 1]
+		}
+	}
+
 	proc readTIFloat {{index ""} {recursed 0}} {
 		global	Type
 		set	bitbyte [uint8]
@@ -646,14 +676,14 @@ if {$a!="**TI73**" && $a!="**TI82**" && $a!="**TI83**" && $a!="**TI83F*" && \
 	requires 0 0
 }
 goto	0
-ascii	8 "Signature"
+ascii	8 "Magic"
 
 main_guard {
 
 if {$a=="**TI85**"} {
 	hex	3 "Export version"
 	ascii	42 "Comment"
-	set	filesize [uint16 "Data size"] ;# used for checksum?
+	set	filesize [uint16 "Data size"]
 
 	section "Variables" {
 		whiless $filesize { # e.i. clibs group
@@ -717,12 +747,14 @@ if {$a=="**TI85**"} {
 	}
 	uint32	"File Size"
 } else {
-	hex	3 "Export version"
+	hex	2 "Unread"
+	entryd	"Owner Prod ID" [hex 1] 1 $ProdIDs
+
 	ascii	42 "Comment"
-	set	filesize [uint16 "Data size"] ;# used for checksum?
+	set	filesize [uint16 "Data size"]
 
 	section "Variables" {
-		whiless $filesize { # e.i. clibs group
+		whiless $filesize { # e.i. clibs "group"
 			sectionvalue $filesize\ bytes
 			section Entry {
 				set	name ""
@@ -779,8 +811,8 @@ if {$a=="**TI85**"} {
 				}
 			}
 		}
-		CheckSum 55 [pos]
 	}
+	CheckSum 55 [pos]
 }
 
 }

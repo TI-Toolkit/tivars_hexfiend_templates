@@ -22,55 +22,55 @@ proc uint24l {a {b -1}} {
 }
 
 proc Field_Names {value} {
+	# 024 CE OSs
+	# 035 cert (030000)
+	# 80D
+	# 80E CE OS
 	return [switch -- $value {
-		000	{ set x "Padding"}
-		010	{ set x "Certificate revision"}
-		020	{ set x "Date signature"}
-		022	{ set x "CSE signature"}
-		023	{ set x "CE signature"}
-		# 024 CE OSs
-		032	{ set x "Date stamp"}
+		000	{ set x "Padding" }
+		010	{ set x "Certificate revision" }
+		020	{ set x "Date signature" }
+		022	{ set x "CSE signature" }
+		023	{ set x "CE signature" }
+		032	{ set x "Date stamp" }
 		033	{ set x "Certificate parent" }
 		034	{ set x "Exam LED avaliable" }
-		# 035 cert, value 030000
 		037	{ set x "Minimum installable OS" }
-		040	{ set x "Calculator ID"}
-		041	{ set x "Validation ID"}
+		040	{ set x "Calculator ID" }
+		041	{ set x "Validation ID" }
 		042	{ set x "Model name" }
 		043	{ set x "Python co-processor" }
-		051	{ set x "About text"}
-		071	{ set x "Standard key header"}
-		073	{ set x "Standard key signature"}
-		081	{ set x "Custom app key header"}
-		083	{ set x "Custom app key data"}
-		090	{ set x "Date stamp subfield"}
-		0A0	{ set x "Calculator ID-related"}
-		0A1	{ set x "Calculator ID"}
-		0A2	{ set x "Validation key"}
+		051	{ set x "About text" }
+		071	{ set x "Standard key header" }
+		073	{ set x "Standard key signature" }
+		081	{ set x "Custom app key header" }
+		083	{ set x "Custom app key data" }
+		090	{ set x "Date stamp subfield" }
+		0A0	{ set x "Calculator ID-related" }
+		0A1	{ set x "Calculator ID" }
+		0A2	{ set x "Validation key" }
 		0B0	{ set x "Default language" }
 		0C0	{ set x "Exam mode status" }
-		800	{ set x "Master"}
-		801	{ set x "Signing key"}
-		802	{ set x "Revision"}
-		803	{ set x "Build"}
-		804	{ set x "Name"}
-		805	{ set x "Expiration date"}
-		806	{ set x "Overuse count"}
-		807	{ set x "Final"}
-		808	{ set x "Page count"}
-		809	{ set x "Disable TI splash"}
-		80A	{ set x "Max hardware revision"}
-		80C	{ set x "Lowest basecode"}
-		# 80D
-		# 80E CE OS
-		810	{ set x "Master"}
-		811	{ set x "Signing key"}
-		812	{ set x "Version"}
-		813	{ set x "Build"}
-		814	{ set x "Name"}
-		817	{ set x "Final"}
-		81A	{ set x "Max hardware"}
-		default	{ set x $value}
+		800	{ set x "Master" }
+		801	{ set x "Signing key" }
+		802	{ set x "Revision" }
+		803	{ set x "Build" }
+		804	{ set x "Name" }
+		805	{ set x "Expiration date" }
+		806	{ set x "Overuse count" }
+		807	{ set x "Final" }
+		808	{ set x "Page count" }
+		809	{ set x "Disable TI splash" }
+		80A	{ set x "Max hardware revision" }
+		80C	{ set x "Lowest basecode" }
+		810	{ set x "Master" }
+		811	{ set x "Signing key" }
+		812	{ set x "Version" }
+		813	{ set x "Build" }
+		814	{ set x "Name" }
+		817	{ set x "Final" }
+		81A	{ set x "Max hardware" }
+		default	{ set x $value }
 	}]
 }
 
