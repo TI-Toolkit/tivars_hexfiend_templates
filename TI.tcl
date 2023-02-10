@@ -40,7 +40,7 @@ proc main_guard {body} {
 # TODO: offset?
 proc entryd {a b c d} {
 	if [dict exists $d $b] {
-		set	e [dict get $d $b]
+		set	e "$b ([dict get $d $b])"
 	} else {
 		set	e $b
 	}
@@ -60,6 +60,16 @@ proc dictsearch {b d} {
 		set	e $b
 	}
 	return	$e
+}
+
+proc FlagRead {Flag bit {name unused/unknown} {notname -1}} {
+	if {($Flag & (1 << $bit)) != 0} {
+		if {$name != -1} {
+			entry $bit $name 1 [expr [pos] - 1]
+		}
+	} elseif {$notname != -1} {
+		entry $bit $notname 1 [expr [pos] - 1]
+	}
 }
 
 proc whiless {size body} { # looptil
@@ -187,16 +197,6 @@ array set Type {
 
 
 proc readTINumb {{index ""}} {
-	proc FlagRead {Flag bit {name unused/unknown} {notname -1}} {
-		if {($Flag & (1 << $bit)) != 0} {
-			if {$name != -1} {
-				entry $name "" 1 [expr [pos] - 1]
-			}
-		} elseif {$notname != -1} {
-			entry $notname "" 1 [expr [pos] - 1]
-		}
-	}
-
 	proc readTIFloat {{index ""} {recursed 0}} {
 		global	Type
 		set	bitbyte [uint8]
@@ -254,16 +254,6 @@ proc readTINumb {{index ""}} {
 }
 
 proc readGDB {} {
-	proc FlagRead {Flag bit {name unused/unknown} {notname -1}} {
-		if {($Flag & (1 << $bit)) != 0} {
-			if {$name != -1} {
-				entry $name "" 1 [expr [pos] - 1]
-			}
-		} elseif {$notname != -1} {
-			entry $notname "" 1 [expr [pos] - 1]
-		}
-	}
-
 	set	datasize [uint16 "Data size"]
 	set	start [pos]
 	uint8	"Unused"
@@ -797,7 +787,11 @@ if {$a=="**TI85**"} {
 
 						if {$headersize == 13} {
 							hex	1 "Prod ID"
-							entryd	"Attribute" [hex 1] 1 [dict create 0x00 "Unarchived" 0x80 "Archived"]
+							section -collapsed "Flags" {
+								set	Flags [hex 1]
+								sectionvalue $Flags\ ([expr ($Flags & 128) ?"Archived":"Unarchived"])
+								FlagRead $Flags 7 Archived Unarchived
+							}
 						}
 						uint16	"Body size"
 					}
