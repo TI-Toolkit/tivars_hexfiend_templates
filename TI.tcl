@@ -428,8 +428,8 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 			if {$datasize > 1} {
 				set	assembly [hex 2]
 				move	-2
+				set	AllData [hex $datasize]
 			}
-			set	AllData [hex $datasize]
 			goto	$posset
 
 			if {$assembly == 0xBB6D} { # 8\[43\]P? Z80
@@ -690,10 +690,8 @@ if {$a=="**TI85**"} {
 				}
 			}
 		}
-		CheckSum 55 [pos]
 	}
-
-
+	CheckSum 55 [pos]
 } elseif {$a=="**TI89**" || $a=="**TI92**" || $a=="**TI92P*"} {
 	hex	2 "Export version"
 	ascii	8 "Folder name"

@@ -928,7 +928,6 @@ proc BAZIC {size} {
 			sectionvalue	[hex $size]
 			goto	$start
 		} else {
-			set	iceT 0
 			sectionvalue	empty
 		}
 
