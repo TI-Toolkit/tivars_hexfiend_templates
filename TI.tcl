@@ -65,10 +65,10 @@ proc dictsearch {b d} {
 proc FlagRead {Flag bit {name unused/unknown} {notname -1}} {
 	if {($Flag & (1 << $bit)) != 0} {
 		if {$name != -1} {
-			entry $bit $name 1 [expr [pos] - 1]
+			entry bit\ $bit $name 1 [expr [pos] - 1]
 		}
 	} elseif {$notname != -1} {
-		entry $bit $notname 1 [expr [pos] - 1]
+		entry bit\ $bit $notname 1 [expr [pos] - 1]
 	}
 }
 
@@ -121,7 +121,7 @@ set	Z80typeDict [dict create \
 	0x0F "Window setup" \
 	0x10 "Zoom settings" \
 	0x11 "TableSet" \
-	0x12 "LCD" \
+	0x12 "LCD / PrintScreen" \
 	0x13 "Backup" \
 	0x15 "AppVar" \
 	0x17 "Group" \
@@ -429,8 +429,8 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 				set	assembly [hex 2]
 				move	-2
 				set	AllData [hex $datasize]
+				goto	$posset
 			}
-			goto	$posset
 
 			if {$assembly == 0xBB6D} { # 8\[43\]P? Z80
 				section Data {
@@ -465,7 +465,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 						set	b2 [uint8]
 						move	-2
 						if {$b2 == 48} {
-							hex	1 "Which is this"
+							hex	1 "ION & OS"
 							hex	2 "jr nc"
 							cstr	ascii "Description"
 						}
@@ -483,7 +483,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 			} elseif {$assembly == 0x0018} { # `nop / jr` 83 ASHELL
 				section Data {
 					sectionvalue $AllData
-					# Wolf.asm
+					# Wolfenstein 3D
 					hex	1 "ASHELL83"
 					hex	2 "jr"
 					hex	2 "Table version"
@@ -671,6 +671,7 @@ ascii	8 "Magic"
 main_guard {
 
 if {$a=="**TI85**"} {
+	# doesnt actually work most of the time yet
 	hex	3 "Export version"
 	ascii	42 "Comment"
 	set	filesize [uint16 "Data size"]
@@ -679,12 +680,12 @@ if {$a=="**TI85**"} {
 		whiless $filesize { # e.i. clibs group
 			section "Entry" {
 				uint16	Header\ Size
-				set	bodysize [uint16 "Body size"]
 				section "Header" {
+					uint16	"Body size"
 					uint8	Type
 					ascii	[uint8 Name\ len] Name
-					uint16	"Body size"
 				}
+				set	bodysize [uint16 "Body size"]
 				section "Body" {
 					hex	$bodysize Data
 				}
@@ -749,33 +750,31 @@ if {$a=="**TI85**"} {
 				set	bodysize 0
 				set	variablestart [pos]
 				set	headersize [uint16 "Header size"]
-				if { $headersize == 9 } { ;# Backup
+				uint16
+				set	datatype [hex 1]
+				move	-3
+				if { $datatype == 0x13 && $a!="**TI82**" || $datatype == 0x0F && $a=="**TI82**" } { ;# Backup
 					section "Header" {
 						sectionvalue 9\ bytes
-						uint16	"First data size"
-						set	datatype [hex 1]
-						if {$a=="**TI82**" && $datatype > 10} {
-							set	datatype [format "0x%02X" [expr $datatype + 4]]
+						uint16	"Data 1 size"
+						uint8
+						entry	"Type" "$datatype (Backup)" 1 [expr [pos]-1]
+						if {$a=="**TI82**"} {
+							set	datatype 0x13
 						}
-						if {$a=="**TI73**" && $datatype == 26} {
-							set	datatype "0x15"
-						}
-						entryd	"Type" $datatype 1 $Z80typeDict
-						uint16	"Second data size"
-						uint16	"Third data size"
-						hex	2 "Address?"
+						uint16	"Data 2 size"
+						uint16	"Data 3 size"
+						hex	2 "Memory address?"
 					}
 				} else {
-					set	bodysize [uint16 "Body size"]
 					section "Header" {
 						sectionvalue $headersize\ bytes
+						uint16	"Body size"
 
-						set	datatype [hex 1]
+						uint8
+						# larger 82 types are slightly offset, maybe make a returning function so the type value remains correct
 						if {$a=="**TI82**" && $datatype > 10} {
 							set	datatype [format "0x%02X" [expr $datatype + 4]]
-						}
-						if {$a=="**TI73**" && $datatype == 26} {
-							set	datatype "0x15"
 						}
 						entryd	"Type" $datatype 1 $Z80typeDict
 						# TODO: file name decoder
@@ -791,8 +790,8 @@ if {$a=="**TI85**"} {
 								FlagRead $Flags 7 Archived Unarchived
 							}
 						}
-						uint16	"Body size"
 					}
+					set	bodysize [uint16 "Body size"]
 				}
 				sectionname [dictsearch $datatype $Z80typeDict]\ entry
 				Z80readBody $datatype $bodysize
