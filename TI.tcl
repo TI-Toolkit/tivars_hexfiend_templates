@@ -65,10 +65,10 @@ proc dictsearch {b d} {
 proc FlagRead {Flag bit {name unused/unknown} {notname -1}} {
 	if {($Flag & (1 << $bit)) != 0} {
 		if {$name != -1} {
-			entry bit\ $bit $name 1 [expr [pos] - 1]
+			entry Bit\ $bit $name 1 [expr [pos] - 1]
 		}
 	} elseif {$notname != -1} {
-		entry bit\ $bit $notname 1 [expr [pos] - 1]
+		entry Bit\ $bit $notname 1 [expr [pos] - 1]
 	}
 }
 
@@ -124,6 +124,7 @@ set	Z80typeDict [dict create \
 	0x12 "LCD / PrintScreen" \
 	0x13 "Backup" \
 	0x15 "AppVar" \
+	0x16 "Temporary" \
 	0x17 "Group" \
 	0x18 "Real Fraction" \
 	0x1A "Image" \
@@ -134,7 +135,13 @@ set	Z80typeDict [dict create \
 	0x1F "Complex pi fraction" \
 	0x20 "Real pi" \
 	0x21 "Real pi fraction" \
+	0x23 "OS" \
+	0x24 "Flash app" \
+	0x25 "Certificate" \
 	0x26 "ID-List" \
+	0x27 "Certificate Memory" \
+	0x29 "Clock" \
+	0x3E "Flash License" \
 ]
 
 set	68KtypeDict [dict create \
@@ -377,6 +384,7 @@ proc readGDB {} {
 			FlagRead $Flags 4
 			FlagRead $Flags 5
 			FlagRead $Flags 6
+			# FlagRead $Flags 7 Always\ set
 		}
 	}
 }
@@ -384,7 +392,7 @@ proc readGDB {} {
 
 proc Z80readBody {datatype {fallbacksize 0}} {
 	global	Type
-	section	"Body"
+	section	-collapsed Data
 	set	start [pos]
 
 	switch -- $datatype {
@@ -417,12 +425,12 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 		}
 		0x03 -
 		0x04 {
-			set	datasize [uint16 "Data size"]
+			set	datasize [uint16 "Code size"]
 			BAZIC	$datasize
 		}
 		0x05 -
 		0x06 {
-			set	datasize [uint16 "Data size"]
+			set	datasize [uint16 "Code size"]
 			set	posset [pos]
 			set	assembly 0
 			if {$datasize > 1} {
@@ -433,7 +441,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 			}
 
 			if {$assembly == 0xBB6D} { # 8\[43\]P? Z80
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					hex	2 "Assembly"
 					set	b1 [uint8]
@@ -473,7 +481,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xC930} { # `ret / jr nc` for 83 ION
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					hex	1 "83 ION"
 					hex	2 "jr nc"
@@ -481,7 +489,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0x0018} { # `nop / jr` 83 ASHELL
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					# Wolfenstein 3D
 					hex	1 "ASHELL83"
@@ -493,7 +501,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0x3F18} { # `ccf / jr` 83 TI-Explorer
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					hex	1 "TI-Explorer"
 					hex	2 "jr"
@@ -504,7 +512,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xAF28} { # `xor a / jr z` 83 SOS
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					hex	1 "83 SOS"
 					hex	2 "jr z"
@@ -513,7 +521,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xEF7B} { # CE eZ80
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					hex	2 "eZ80"
 					set	eZtype [uint8]
@@ -544,7 +552,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xD900} { # `Stop;nop` mallard
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					hex	6 "Mallard"
 					uint16	-hex "Start address"
@@ -552,14 +560,14 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xD500} { # `Return;nop` crash
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					hex	3 "Crash"
 					cstr	ascii "Description"
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xEF69} { # CSE
-				section Data {
+				section Code {
 					sectionvalue $AllData
 					hex	2 "Assembly"
 					hex	[expr $datasize+$posset-[pos]] "Data"
@@ -626,7 +634,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 proc SysTab {size} {
 	global	Z80typeDict
 	set	EntryStart [pos]
-	section "System table entry" {
+	section -collapsed "System table entry" {
 		set	subtype [hex 1]
 		set	typename [entryd "Type" $subtype 1 $Z80typeDict]
 		hex	1 "Reserved"
@@ -661,8 +669,7 @@ little_endian
 set	a [ascii 8]
 if {$a!="**TI73**" && $a!="**TI82**" && $a!="**TI83**" && $a!="**TI83F*" && \
     $a!="**TI89**" && $a!="**TI92**" && $a!="**TI92P*" && \
-    $a!="**TI85**"
-} {
+    $a!="**TI85**" && $a!="**TI86**"} {
 	requires 0 0
 }
 goto	0
@@ -670,7 +677,7 @@ ascii	8 "Magic"
 
 main_guard {
 
-if {$a=="**TI85**"} {
+if {$a=="**TI85**" || $a=="**TI86**"} {
 	# doesnt actually work most of the time yet
 	hex	3 "Export version"
 	ascii	42 "Comment"
@@ -679,15 +686,32 @@ if {$a=="**TI85**"} {
 	section "Variables" {
 		whiless $filesize { # e.i. clibs group
 			section "Entry" {
-				uint16	Header\ Size
-				section "Header" {
-					uint16	"Body size"
-					uint8	Type
-					ascii	[uint8 Name\ len] Name
+				uint16	Body\ offset
+				uint16
+				set	datatype [hex 1]
+				move	-3
+				section "Meta" {
+					if {$datatype == 0x1D} {
+						uint16	"Data 1 size"
+						entry	"Type" "[hex 1] (Backup)" 1 [expr [pos]-1]
+						uint16	"Data 2 size"
+						uint16	"Data 3 size"
+						hex	2 "Address of data 2"
+					} else {
+						uint16	"Body size"
+						hex	1 Type
+						ascii	[uint8 Name\ length] Name
+					}
 				}
-				set	bodysize [uint16 "Body size"]
 				section "Body" {
-					hex	$bodysize Data
+					if {$datatype == 0x1D} {
+						hex	[uint16 "Data 1 size"] "Data 1"
+						hex	[uint16 "Data 2 size"] "Data 2"
+						hex	[uint16 "Data 3 size"] "Data 3"
+					} else {
+						set	datasize [uint16 "Data size"]
+						hex	$datasize Data
+					}
 				}
 			}
 		}
@@ -749,13 +773,13 @@ if {$a=="**TI85**"} {
 				set	name ""
 				set	bodysize 0
 				set	variablestart [pos]
-				set	headersize [uint16 "Header size"]
+				set	headersize [uint16 "Body offset"]
 				uint16
 				set	datatype [hex 1]
 				move	-3
-				if { $datatype == 0x13 && $a!="**TI82**" || $datatype == 0x0F && $a=="**TI82**" } { ;# Backup
-					section "Header" {
-						sectionvalue 9\ bytes
+				section "Meta" {
+					sectionvalue $headersize\ bytes
+					if { $datatype == 0x13 && $a!="**TI82**" || $datatype == 0x0F && $a=="**TI82**" } { ;# Backup
 						uint16	"Data 1 size"
 						uint8
 						entry	"Type" "$datatype (Backup)" 1 [expr [pos]-1]
@@ -764,12 +788,9 @@ if {$a=="**TI85**"} {
 						}
 						uint16	"Data 2 size"
 						uint16	"Data 3 size"
-						hex	2 "Memory address?"
-					}
-				} else {
-					section "Header" {
-						sectionvalue $headersize\ bytes
-						uint16	"Body size"
+						hex	2 "Address?"
+					} else {
+						uint16	"Data size"
 
 						uint8
 						# larger 82 types are slightly offset, maybe make a returning function so the type value remains correct
@@ -783,7 +804,7 @@ if {$a=="**TI85**"} {
 						entry	"Name" $name 8 [expr [pos]-8]
 
 						if {$headersize == 13} {
-							hex	1 "Prod ID"
+							hex	1 Version
 							section -collapsed "Flags" {
 								set	Flags [hex 1]
 								sectionvalue $Flags\ ([expr ($Flags & 128) ?"Archived":"Unarchived"])
@@ -791,10 +812,23 @@ if {$a=="**TI85**"} {
 							}
 						}
 					}
-					set	bodysize [uint16 "Body size"]
 				}
+
+				section	"Body" {
+					set	start [pos]
+					if { $datatype == 0x13 } {
+						hex	[uint16 "Data 1 size"] "Data 1"
+						hex	[uint16 "Data 2 size"] "Data 2"
+						hex	[uint16 "Data 3 size"] "Data 3"
+					} else {
+						set	datasize [uint16 "Data size"]
+						Z80readBody $datatype $datasize
+					}
+					# sectionvalue "[expr [pos]-$start] bytes"
+				}
+
 				sectionname [dictsearch $datatype $Z80typeDict]\ entry
-				Z80readBody $datatype $bodysize
+
 				if {$name == ""} {
 					sectionvalue "[expr [pos]-$variablestart] bytes"
 				} else {

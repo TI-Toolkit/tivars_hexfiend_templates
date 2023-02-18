@@ -920,7 +920,7 @@ set	BAZIC_EF [dict create \
 }
 
 proc BAZIC {size} {
-	section -collapsed "Data" {
+	section -collapsed "Code" {
 		set	start [pos]
 		if {$size!=0} {
 			set	iceT [expr [uint8] == 44]
