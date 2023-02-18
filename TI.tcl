@@ -686,7 +686,8 @@ if {$a=="**TI85**" || $a=="**TI86**"} {
 	section "Variables" {
 		whiless $filesize { # e.i. clibs group
 			section "Entry" {
-				uint16	Body\ offset
+				set	headsize [uint16 Body\ offset]
+				set	headstart [pos]
 				uint16
 				set	datatype [hex 1]
 				move	-3
@@ -701,6 +702,8 @@ if {$a=="**TI85**" || $a=="**TI86**"} {
 						uint16	"Body size"
 						hex	1 Type
 						ascii	[uint8 Name\ length] Name
+						# for TI-86 file variants: some include [garbage] name padding
+						goto	[expr $headsize + $headstart]
 					}
 				}
 				section "Body" {
@@ -815,7 +818,7 @@ if {$a=="**TI85**" || $a=="**TI86**"} {
 				}
 
 				section	"Body" {
-					set	start [pos]
+					# set	start [pos]
 					if { $datatype == 0x13 } {
 						hex	[uint16 "Data 1 size"] "Data 1"
 						hex	[uint16 "Data 2 size"] "Data 2"
