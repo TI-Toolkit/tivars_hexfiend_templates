@@ -276,7 +276,7 @@ proc readGDB {} {
 		FlagRead $Flags 4 CoordsOn CoordsOff
 		FlagRead $Flags 5 AxesOn AxesOff
 		FlagRead $Flags 6 LabelOn LabelOff
-		FlagRead $Flags 7 Gridon GridOff
+		FlagRead $Flags 7 GridLine GridDot
 	}
 	section "Sequence settings" {
 		set	Flags [hex 1]
@@ -441,7 +441,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 			}
 
 			if {$assembly == 0xBB6D} { # 8\[43\]P? Z80
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					hex	2 "Assembly"
 					set	b1 [uint8]
@@ -481,7 +481,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xC930} { # `ret / jr nc` for 83 ION
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					hex	1 "83 ION"
 					hex	2 "jr nc"
@@ -489,7 +489,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0x0018} { # `nop / jr` 83 ASHELL
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					# Wolfenstein 3D
 					hex	1 "ASHELL83"
@@ -501,7 +501,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0x3F18} { # `ccf / jr` 83 TI-Explorer
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					hex	1 "TI-Explorer"
 					hex	2 "jr"
@@ -512,7 +512,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xAF28} { # `xor a / jr z` 83 SOS
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					hex	1 "83 SOS"
 					hex	2 "jr z"
@@ -521,7 +521,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xEF7B} { # CE eZ80
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					hex	2 "eZ80"
 					set	eZtype [uint8]
@@ -552,7 +552,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xD900} { # `Stop;nop` mallard
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					hex	6 "Mallard"
 					uint16	-hex "Start address"
@@ -560,14 +560,14 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xD500} { # `Return;nop` crash
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					hex	3 "Crash"
 					cstr	ascii "Description"
 					hex	[expr $datasize+$posset-[pos]] "Data"
 				}
 			} elseif {$assembly == 0xEF69} { # CSE
-				section Code {
+				section -collapsed Code {
 					sectionvalue $AllData
 					hex	2 "Assembly"
 					hex	[expr $datasize+$posset-[pos]] "Data"
@@ -601,11 +601,6 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 			foreach index $values {
 				readTINumb $index
 			}
-		}
-		0x13 {
-			hex [uint16 "Data 1 size"] "Data 1"
-			hex [uint16 "Data 2 size"] "Data 2"
-			hex [uint16 "Data 3 size"] "Data 3"
 		}
 		0x15 {
 			ReadAppVar
@@ -678,7 +673,6 @@ ascii	8 "Magic"
 main_guard {
 
 if {$a=="**TI85**" || $a=="**TI86**"} {
-	# doesnt actually work most of the time yet
 	hex	3 "Export version"
 	ascii	42 "Comment"
 	set	filesize [uint16 "Data size"]
@@ -699,7 +693,7 @@ if {$a=="**TI85**" || $a=="**TI86**"} {
 						uint16	"Data 3 size"
 						hex	2 "Address of data 2"
 					} else {
-						uint16	"Body size"
+						uint16	"Data size"
 						hex	1 Type
 						ascii	[uint8 Name\ length] Name
 						# for TI-86 file variants: some include [garbage] name padding
