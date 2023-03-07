@@ -298,8 +298,12 @@ proc readGDB {} {
 		set	Flags [hex 1]
 		sectionvalue $Flags
 		FlagRead $Flags 0 ExprOff ExprOn
-		FlagRead $Flags 1
-		FlagRead $Flags 2
+		set	seqmode [expr ($Flags & 6) >> 1]
+		if {$seqmode} {
+			entry Bits\ 1&2 "SEQ(n+[expr $seqmode])" 1 [expr [pos] - 1]
+		} else {
+			entry Bits\ 1&2 "SEQ(n)" 1 [expr [pos] - 1]
+		}
 		FlagRead $Flags 3
 		FlagRead $Flags 4
 		FlagRead $Flags 5
@@ -331,11 +335,13 @@ proc readGDB {} {
 		}
 	}
 	if {$GraphMode == 64} {
-		set	values { X1T Y1T X2T Y2T X3T Y3T X4T Y4T X5T Y5T X6T Y6T }
+		set	valuesAll { X1T Y1T X2T Y2T X3T Y3T X4T Y4T X5T Y5T X6T Y6T }
+	} else {
+		set	valuesAll $values
 	}
 
 	section "Functions"
-	foreach index $values {
+	foreach index $valuesAll {
 		section $index {
 			section -collapsed "Activation flag" {
 				set	Flags [hex 1]
