@@ -356,7 +356,7 @@ proc readGDB {} {
 				}
 				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $Z80typeDict
 				FlagRead $Flags 5 Selected Unselected
-				FlagRead $Flags 6 "Was used when graphed"
+				FlagRead $Flags 6 "Was used for graph"
 				FlagRead $Flags 7 "Link transfer flag"
 			}
 			BAZIC	[uint16 "Size"]
@@ -638,8 +638,22 @@ proc SysTab {size} {
 	global	Z80typeDict
 	set	EntryStart [pos]
 	section -collapsed "System table entry" {
-		set	subtype [hex 1]
-		set	typename [entryd "Type" $subtype 1 $Z80typeDict]
+		set	Flags [hex 1]
+		section -collapsed "Type" {
+			if {($Flags & 23) != 3} {
+				set	subtype [format "0x%02X" [expr $Flags & 63]]
+			} else {
+				set	subtype [format "0x%02X" [expr $Flags & 31]]
+			}
+			entryd	"Type" $subtype 1 $Z80typeDict
+			set	typename [dictsearch $subtype $Z80typeDict]
+			sectionvalue $Flags\ ($typename)
+			if {($Flags & 23) == 3} {
+				FlagRead $Flags 5 Selected Unselected
+			}
+			FlagRead $Flags 6 "Was used for graph"
+			FlagRead $Flags 7 "Link transfer flag"
+		}
 		hex	1 "Reserved"
 		hex	1 "Version"
 		hex	2 "Structure pointer"
