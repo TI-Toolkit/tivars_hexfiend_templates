@@ -261,6 +261,7 @@ proc readTINumb {{index ""}} {
 }
 
 proc readGDB {} {
+	global	Z80typeDict
 	set	datasize [uint16 "Data size"]
 	set	start [pos]
 	uint8	"NULL"
@@ -345,19 +346,18 @@ proc readGDB {} {
 	section "Functions"
 	foreach index $valuesAll {
 		section $index {
-			section -collapsed "Activation flag" {
+			# see https://wikiti.brandonw.net/index.php?title=83Plus:OS:System_Table#Entry_Parts
+			section -collapsed "Flags" {
 				set	Flags [hex 1]
 				if {($Flags & (1 << 5)) != 0} {
 					sectionvalue "$Flags - Selected"
 				} else {
 					sectionvalue "$Flags - Unselected"
 				}
-				FlagRead $Flags 2
-				FlagRead $Flags 3 Ungraphed Graphed
-				FlagRead $Flags 4
+				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $Z80typeDict
 				FlagRead $Flags 5 Selected Unselected
-				FlagRead $Flags 6 "Seq-Unknown"
-				FlagRead $Flags 7
+				FlagRead $Flags 6 "Was used when graphed"
+				FlagRead $Flags 7 "Link transfer flag"
 			}
 			BAZIC	[uint16 "Size"]
 		}
@@ -365,7 +365,7 @@ proc readGDB {} {
 	endsection
 
 	if {[pos]-$start != $datasize} {
-		ascii	3 "Color indicator"
+		ascii	3 "Color magic"
 		section "Colors" {
 			set	oscolors [dict create \
 			1 BLUE 2 RED 3 BLACK 4 MAGENTA \
