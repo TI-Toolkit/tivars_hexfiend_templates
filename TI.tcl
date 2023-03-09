@@ -263,10 +263,10 @@ proc readTINumb {{index ""}} {
 proc readGDB {} {
 	set	datasize [uint16 "Data size"]
 	set	start [pos]
-	uint8	"Unused"
+	uint8	"NULL"
 	set	GraphMode [uint8]
-	entryd	"Graph mode" $GraphMode 1 [dict create 16 Function 32 Polar 64 Parametric 128 Sequence]
-	section "Mode settings" {
+	entryd	"Graph mode flag" $GraphMode 1 [dict create 16 Function 32 Polar 64 Parametric 128 Sequence]
+	section "Format flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
 		FlagRead $Flags 0 Dot Connected
@@ -278,11 +278,13 @@ proc readGDB {} {
 		FlagRead $Flags 6 LabelOn LabelOff
 		FlagRead $Flags 7 GridLine GridDot
 	}
-	section "Sequence settings" {
+	section "Sequence flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
 		if {($Flags & (1 << 0)) != 0} {
 			FlagRead $Flags 0 "Web"
+		} elseif {($Flags & (1 << 1)) != 0} {
+			FlagRead $Flags 1 "VertWeb"
 		} elseif {($Flags & (1 << 2)) != 0} {
 			FlagRead $Flags 2 "uv"
 		} elseif {($Flags & (1 << 3)) != 0} {
@@ -290,9 +292,9 @@ proc readGDB {} {
 		} else {
 			FlagRead $Flags 4 "uw" "Time"
 		}
-		FlagRead $Flags 5
-		FlagRead $Flags 6
-		FlagRead $Flags 7
+		FlagRead $Flags 5 Unknown
+		FlagRead $Flags 6 Unused
+		FlagRead $Flags 7 Unused
 	}
 	section "Extended settings" {
 		set	Flags [hex 1]
@@ -300,15 +302,15 @@ proc readGDB {} {
 		FlagRead $Flags 0 ExprOff ExprOn
 		set	seqmode [expr ($Flags & 6) >> 1]
 		if {$seqmode} {
-			entry Bits\ 1&2 "SEQ(n+[expr $seqmode])" 1 [expr [pos] - 1]
+			entry Bits\ 1&2 "SEQ(n+$seqmode)" 1 [expr [pos] - 1]
 		} else {
 			entry Bits\ 1&2 "SEQ(n)" 1 [expr [pos] - 1]
 		}
-		FlagRead $Flags 3
-		FlagRead $Flags 4
-		FlagRead $Flags 5
-		FlagRead $Flags 6
-		FlagRead $Flags 7
+		FlagRead $Flags 3 Unused
+		FlagRead $Flags 4 Unused
+		FlagRead $Flags 5 Unused
+		FlagRead $Flags 6 Unused
+		FlagRead $Flags 7 Unused
 	}
 
 	switch -- $GraphMode {
@@ -384,13 +386,13 @@ proc readGDB {} {
 			set	Flags [hex 1]
 			sectionvalue $Flags
 			FlagRead $Flags 0 "Detect Asymptotes On" "Detect Asymptotes Off"
-			FlagRead $Flags 1
-			FlagRead $Flags 2
-			FlagRead $Flags 3
-			FlagRead $Flags 4
-			FlagRead $Flags 5
-			FlagRead $Flags 6
-			# FlagRead $Flags 7 Always\ set
+			FlagRead $Flags 1 Unused
+			FlagRead $Flags 2 Unused
+			FlagRead $Flags 3 Unused
+			FlagRead $Flags 4 Unused
+			FlagRead $Flags 5 Unused
+			FlagRead $Flags 6 Unused
+			FlagRead $Flags 7 Unused
 		}
 	}
 }
