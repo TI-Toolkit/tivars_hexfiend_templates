@@ -3,8 +3,10 @@
 # (c) 2021-2023 LogicalJoe
 
 
-if {[file exists TI/BAZIC.txt]} {
-	include	TI/BAZIC.txt
+variable ThisDirectory [file dirname [file normalize [info script]]]
+
+if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
+	source	[file join $ThisDirectory BAZIC.txt]
 } else {
 	proc BAZIC {datasize} {
 		if {$datasize} {
@@ -15,8 +17,8 @@ if {[file exists TI/BAZIC.txt]} {
 	}
 }
 
-if {[file exists TI/AppVar.txt]} {
-	include	TI/AppVar.txt
+if {[file exists [file join $ThisDirectory AppVar.txt]]} {
+	source	[file join $ThisDirectory AppVar.txt]
 } else {
 	proc ReadAppVar {} {
 		set	datasize [uint16 "Data size"]
@@ -683,6 +685,9 @@ proc CheckSum {loopStart loopEnd} {
 }
 
 little_endian
+if {[len] < 8} {
+	requires 0 0
+}
 set	a [ascii 8]
 if {$a!="**TI73**" && $a!="**TI82**" && $a!="**TI83**" && $a!="**TI83F*" && \
     $a!="**TI89**" && $a!="**TI92**" && $a!="**TI92P*" && \
