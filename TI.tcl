@@ -146,6 +146,35 @@ set	Z80typeDict [dict create \
 	0x3E "Flash License" \
 ]
 
+set	85typeDict [dict create \
+	0x00 "Real" \
+	0x01 "Complex" \
+	0x02 "Real vector" \
+	0x03 "Complex vector" \
+	0x04 "Real list" \
+	0x05 "Complex list" \
+	0x06 "Real matrix" \
+	0x07 "Complex matrix" \
+	0x08 "Real constant" \
+	0x09 "Complex constant" \
+	0x0A "Equation" \
+	0x0C "String" \
+	0x0D "Function GDB" \
+	0x0E "Polar GDB" \
+	0x0F "Parametric GDB" \
+	0x10 "Differential GDB" \
+	0x11 "Picture" \
+	0x12 "Program" \
+	0x14 "LCD / PrintScreen" \
+	0x17 "Function window" \
+	0x18 "Polar window" \
+	0x19 "Param window" \
+	0x1A "DifEq window" \
+	0x1B "Recall window" \
+	0x1D "Backup" \
+	0x1E "Unknown" \
+]
+
 set	68KtypeDict [dict create \
 	0x00 "Expression" \
 	0x04 "List" \
@@ -699,50 +728,8 @@ ascii	8 "Magic"
 
 main_guard {
 
-if {$a=="**TI85**" || $a=="**TI86**"} {
-	hex	3 "Export version"
-	ascii	42 "Comment"
-	set	filesize [uint16 "Data size"]
-
-	section "Variables" {
-		whiless $filesize { # e.i. clibs group
-			section "Entry" {
-				set	headsize [uint16 Body\ offset]
-				set	headstart [pos]
-				uint16
-				set	datatype [hex 1]
-				move	-3
-				section "Meta" {
-					if {$datatype == 0x1D} {
-						uint16	"Data 1 size"
-						entry	"Type" "[hex 1] (Backup)" 1 [expr [pos]-1]
-						uint16	"Data 2 size"
-						uint16	"Data 3 size"
-						hex	2 "Address of data 2"
-					} else {
-						uint16	"Data size"
-						hex	1 Type
-						ascii	[uint8 Name\ length] Name
-						# for TI-86 file variants: some include [garbage] name padding
-						goto	[expr $headsize + $headstart]
-					}
-				}
-				section "Body" {
-					if {$datatype == 0x1D} {
-						hex	[uint16 "Data 1 size"] "Data 1"
-						hex	[uint16 "Data 2 size"] "Data 2"
-						hex	[uint16 "Data 3 size"] "Data 3"
-					} else {
-						set	datasize [uint16 "Data size"]
-						hex	$datasize Data
-					}
-				}
-			}
-		}
-	}
-	CheckSum 55 [pos]
-} elseif {$a=="**TI89**" || $a=="**TI92**" || $a=="**TI92P*"} {
-	hex	2 "Export version"
+if {$a=="**TI89**" || $a=="**TI92**" || $a=="**TI92P*"} {
+	hex	2 "Thing"
 	ascii	8 "Folder name"
 	ascii	40 "Comment"
 	set	numFiles [uint16 "Variable count"]
@@ -784,35 +771,33 @@ if {$a=="**TI85**" || $a=="**TI86**"} {
 	}
 	uint32	"File Size"
 } else {
-	hex	2 "Unread"
+	hex	2 "Thing"
 	entryd	"Owner Prod ID" [hex 1] 1 $ProdIDs
 
 	ascii	42 "Comment"
 	set	filesize [uint16 "Data size"]
 
 	section "Variables" {
-		whiless $filesize { # e.i. clibs "group"
+		whiless $filesize { # i.e. clibs "group"
 			sectionvalue $filesize\ bytes
 			section Entry {
 				set	name ""
-				set	bodysize 0
-				set	variablestart [pos]
-				set	headersize [uint16 "Body offset"]
+				set	typeName ""
+				set	bodyOffset [uint16 "Body offset"]
+				set	headStart [pos]
 				uint16
 				set	datatype [hex 1]
 				move	-3
 				section "Meta" {
-					sectionvalue $headersize\ bytes
-					if { $datatype == 0x13 && $a!="**TI82**" || $datatype == 0x0F && $a=="**TI82**" } { ;# Backup
+					sectionvalue $bodyOffset\ bytes
+					if { $datatype == 0x13 && $a!="**TI82**" || $datatype == 0x0F && $a=="**TI82**" } {
+						# Backup
+						set	typeName "Backup"
 						uint16	"Data 1 size"
-						uint8
-						entry	"Type" "$datatype (Backup)" 1 [expr [pos]-1]
-						if {$a=="**TI82**"} {
-							set	datatype 0x13
-						}
+						entry	"Type" "[hex 1] (Backup)" 1 [expr [pos]-1]
 						uint16	"Data 2 size"
 						uint16	"Data 3 size"
-						hex	2 "Address?"
+						hex	2 "Address of data 2"
 					} else {
 						uint16	"Data size"
 
@@ -821,29 +806,42 @@ if {$a=="**TI85**" || $a=="**TI86**"} {
 						if {$a=="**TI82**" && $datatype > 10} {
 							set	datatype [format "0x%02X" [expr $datatype + 4]]
 						}
-						entryd	"Type" $datatype 1 $Z80typeDict
-						# TODO: file name decoder
-						set	name [string map {[ θ} [ascii 8]]
-						set	name [string map {] |L} $name]
-						entry	"Name" $name 8 [expr [pos]-8]
-
-						if {$headersize == 13} {
-							hex	1 Version
-							section -collapsed "Flags" {
-								set	Flags [hex 1]
-								sectionvalue $Flags\ ([expr ($Flags & 128) ?"Archived":"Unarchived"])
-								FlagRead $Flags 7 Archived Unarchived
+						if {$a=="**TI85**" || $a=="**TI86**"} {
+							set	typeName [dictsearch $datatype $85typeDict]
+							entryd	"Type" $datatype 1 $85typeDict
+							set	name [string map {[ θ} [ascii [uint8 Name\ length] Name]]
+						} else {
+							set	typeName [dictsearch $datatype $Z80typeDict]
+							entryd	"Type" $datatype 1 $Z80typeDict
+							# TODO: file name decoder
+							set	name [string map {[ θ} [ascii 8]]
+							set	name [string map {] |L} $name]
+							entry	"Name" $name 8 [expr [pos]-8]
+							if {$bodyOffset == 13} {
+								hex	1 Version
+								section -collapsed "Flags" {
+									set	Flags [hex 1]
+									sectionvalue $Flags\ ([expr ($Flags & 128) ?"Archived":"Unarchived"])
+									FlagRead $Flags 7 Archived Unarchived
+								}
 							}
 						}
+
+						# for TI-86 file variants: some include [garbage] name padding
+						goto	[expr $bodyOffset + $headStart]
+
 					}
 				}
 
 				section	"Body" {
-					# set	start [pos]
-					if { $datatype == 0x13 } {
+					if { $typeName == "Backup" } {
 						hex	[uint16 "Data 1 size"] "Data 1"
 						hex	[uint16 "Data 2 size"] "Data 2"
 						hex	[uint16 "Data 3 size"] "Data 3"
+					} elseif { $a=="**TI85**" || $a=="**TI86**" } {
+						set	datasize [uint16 "Data size"]
+						hex	$datasize Data
+						# T85readBody $datatype $datasize
 					} else {
 						set	datasize [uint16 "Data size"]
 						Z80readBody $datatype $datasize
@@ -851,12 +849,13 @@ if {$a=="**TI85**" || $a=="**TI86**"} {
 					# sectionvalue "[expr [pos]-$start] bytes"
 				}
 
-				sectionname [dictsearch $datatype $Z80typeDict]\ entry
+				sectionname $typeName\ entry
+
 
 				if {$name == ""} {
-					sectionvalue "[expr [pos]-$variablestart] bytes"
+					sectionvalue "[expr [pos]-$headStart] bytes"
 				} else {
-					sectionvalue "$name - [expr [pos]-$variablestart] bytes"
+					sectionvalue "$name - [expr [pos]-$headStart] bytes"
 				}
 			}
 		}

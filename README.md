@@ -12,11 +12,11 @@ though functionality is not guaranteed
 
 hexFiend is avaliable [here](https://github.com/HexFiend/HexFiend).
 
-1. Open Hexfiend's Binary Template browser
-2. Select "Open Templates Folder"
+1. Open Hexfiend's Binary Template browser (select View>Binary Templates)
+2. Select "Open Templates Folder" from the Template list
 3. Copy this folder to the folder that is opened
-4. Select `TI` or `TI-flash` from the template list to use it
+4. Select `TI` or `TI-flash` from HexFiend's template list to use it
 
 ## Other stuff
 
-January 8, 2023 - First release I think.
+January 8, 2023 - First private release
