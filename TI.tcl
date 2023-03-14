@@ -291,7 +291,7 @@ proc readTINumb {{index ""}} {
 	readTIFloat $index 0
 }
 
-proc readGDB {} {
+proc readGDB {{magic "**TI83F*"}} {
 	global	Z80typeDict
 	set	datasize [uint16 "Data size"]
 	set	start [pos]
@@ -345,11 +345,20 @@ proc readGDB {} {
 		FlagRead $Flags 7 Unused
 	}
 
-	switch -- $GraphMode {
-		16	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Xres } }
-		32	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Thetamin Thetamax Thetastep } }
-		64	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Tmin Tmax Tstep } }
-		128	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl PlotStart nMax u(1) v(1) nMin u(2) v(2) w(2) PlotStep w(1) } }
+	if {$magic == "**TI82**"} {
+		switch -- $GraphMode {
+			16	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl } }
+			32	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Thetamin Thetamax Thetastep } }
+			64	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Tmin Tmax Tstep } }
+			128	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl nMin nMax UnStart VnStart nStart } }
+		}
+	} else {
+		switch -- $GraphMode {
+			16	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Xres } }
+			32	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Thetamin Thetamax Thetastep } }
+			64	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Tmin Tmax Tstep } }
+			128	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl PlotStart nMax u(1) v(1) nMin u(2) v(2) w(2) PlotStep w(1) } }
+		}
 	}
 	section "Numbers" {
 		foreach index $values {
@@ -361,7 +370,7 @@ proc readGDB {} {
 		16	{ set	values { Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0 } }
 		32	{ set	values { r1 r2 r3 r4 r5 r6 } }
 		64	{ set	values { X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T } }
-		128	{ set	values { u v w } }
+		128	{ set	values [expr {"$magic" == "**TI82**"} ?{ u v }:{ u v w }] }
 	}
 	section "Styles" {
 		foreach index $values {
@@ -429,7 +438,7 @@ proc readGDB {} {
 }
 
 
-proc Z80readBody {datatype {fallbacksize 0}} {
+proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 	global	Type
 	section	-collapsed Data
 	set	start [pos]
@@ -620,22 +629,29 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 			hex	$datasize "Data"
 		}
 		0x08 {
-			readGDB
+			readGDB $magic
 		}
 		0x0F -
 		0x10 -
 		0x11 {
 			set	datasize [uint16 "Data size"]
-			set	values { \
-			Xmin Xmax Xscl Ymin Ymax Yscl θmin θmax \
-			θstep Tmin Tmax Tstep PlotStart nMax u(1) v(1) \
-			nMin u(2) v(2) w(2) PlotStep Xres w(1) }
+			if {$magic == "**TI82**"} {
+				set	values { \
+				Xmin Xmax Xscl Ymin Ymax Yscl θmin θmax \
+				θstep Tmin Tmax Tstep nMin nMax \
+				UnStart VnStart nStart }
+			} else {
+				set	values { \
+				Xmin Xmax Xscl Ymin Ymax Yscl θmin θmax \
+				θstep Tmin Tmax Tstep PlotStart nMax u(1) v(1) \
+				nMin u(2) v(2) w(2) PlotStep Xres w(1) }
+			}
 
 			if {$datatype == $Type(Window)} {
 				uint8	"Null"
 			}
 			if {$datatype == $Type(TSet)} {
-				set	values { TblStrt DeltaTbl }
+				set	values { TblStart DeltaTbl }
 			}
 			foreach index $values {
 				readTINumb $index
@@ -647,7 +663,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 		0x17 {
 			set	subsize [uint16 "Data size"]
 			whiless $subsize {
-				SysTab	$subsize
+				SysTab	$subsize $magic
 			}
 		}
 		0x1A {
@@ -665,7 +681,7 @@ proc Z80readBody {datatype {fallbacksize 0}} {
 	endsection
 }
 
-proc SysTab {size} {
+proc SysTab {size magic} {
 	global	Z80typeDict
 	set	EntryStart [pos]
 	section -collapsed "System table entry" {
@@ -697,7 +713,7 @@ proc SysTab {size} {
 		} else {
 			hex	3 "Name data"
 		}
-		Z80readBody $subtype $size
+		Z80readBody $subtype $magic $size
 		sectionvalue "$typename - [expr [pos]-$EntryStart] bytes"
 	}
 }
@@ -717,18 +733,16 @@ little_endian
 if {[len] < 8} {
 	requires 0 0
 }
-set	a [ascii 8]
-if {$a!="**TI73**" && $a!="**TI82**" && $a!="**TI83**" && $a!="**TI83F*" && \
-    $a!="**TI89**" && $a!="**TI92**" && $a!="**TI92P*" && \
-    $a!="**TI85**" && $a!="**TI86**"} {
+set	magic [ascii 8 Magic]
+if {$magic!="**TI73**" && $magic!="**TI82**" && $magic!="**TI83**" && $magic!="**TI83F*" && \
+    $magic!="**TI89**" && $magic!="**TI92**" && $magic!="**TI92P*" && \
+    $magic!="**TI85**" && $magic!="**TI86**"} {
 	requires 0 0
 }
-goto	0
-ascii	8 "Magic"
 
 main_guard {
 
-if {$a=="**TI89**" || $a=="**TI92**" || $a=="**TI92P*"} {
+if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 	hex	2 "Thing"
 	ascii	8 "Folder name"
 	ascii	40 "Comment"
@@ -790,7 +804,7 @@ if {$a=="**TI89**" || $a=="**TI92**" || $a=="**TI92P*"} {
 				move	-3
 				section "Meta" {
 					sectionvalue $bodyOffset\ bytes
-					if { $datatype == 0x13 && $a!="**TI82**" || $datatype == 0x0F && $a=="**TI82**" } {
+					if { $datatype == 0x13 && $magic!="**TI82**" || $datatype == 0x0F && $magic=="**TI82**" } {
 						# Backup
 						set	typeName "Backup"
 						uint16	"Data 1 size"
@@ -803,10 +817,10 @@ if {$a=="**TI89**" || $a=="**TI92**" || $a=="**TI92P*"} {
 
 						uint8
 						# larger 82 types are slightly offset, maybe make a returning function so the type value remains correct
-						if {$a=="**TI82**" && $datatype > 10} {
+						if {$magic=="**TI82**" && $datatype > 10} {
 							set	datatype [format "0x%02X" [expr $datatype + 4]]
 						}
-						if {$a=="**TI85**" || $a=="**TI86**"} {
+						if {$magic=="**TI85**" || $magic=="**TI86**"} {
 							set	typeName [dictsearch $datatype $85typeDict]
 							entryd	"Type" $datatype 1 $85typeDict
 							set	name [string map {[ θ} [ascii [uint8 Name\ length] Name]]
@@ -838,13 +852,13 @@ if {$a=="**TI89**" || $a=="**TI92**" || $a=="**TI92P*"} {
 						hex	[uint16 "Data 1 size"] "Data 1"
 						hex	[uint16 "Data 2 size"] "Data 2"
 						hex	[uint16 "Data 3 size"] "Data 3"
-					} elseif { $a=="**TI85**" || $a=="**TI86**" } {
+					} elseif { $magic=="**TI85**" || $magic=="**TI86**" } {
 						set	datasize [uint16 "Data size"]
 						hex	$datasize Data
 						# T85readBody $datatype $datasize
 					} else {
 						set	datasize [uint16 "Data size"]
-						Z80readBody $datatype $datasize
+						Z80readBody $datatype $magic $datasize
 					}
 					# sectionvalue "[expr [pos]-$start] bytes"
 				}
