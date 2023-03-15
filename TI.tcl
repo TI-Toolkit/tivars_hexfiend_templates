@@ -301,7 +301,7 @@ proc readGDB {{magic "**TI83F*"}} {
 	section "Format flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
-		FlagRead $Flags 0 Dot Connected
+		FlagRead $Flags 0 MonoDot MonoConnected
 		FlagRead $Flags 1 Simul Sequential
 		FlagRead $Flags 2 GridOn GridOff
 		FlagRead $Flags 3 PolarGC RectGC
@@ -313,17 +313,7 @@ proc readGDB {{magic "**TI83F*"}} {
 	section "Sequence flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
-		if {($Flags & (1 << 0)) != 0} {
-			FlagRead $Flags 0 "Web"
-		} elseif {($Flags & (1 << 1)) != 0} {
-			FlagRead $Flags 1 "VertWeb"
-		} elseif {($Flags & (1 << 2)) != 0} {
-			FlagRead $Flags 2 "uv"
-		} elseif {($Flags & (1 << 3)) != 0} {
-			FlagRead $Flags 3 "vw"
-		} else {
-			FlagRead $Flags 4 "uw" "Time"
-		}
+		entryd	Bits\ 0-4 [expr $Flags & 31] 1 [dict create 0 Time 1 Web 2 VertWeb 4 uv 8 vw 16 uw]
 		FlagRead $Flags 5 Unknown
 		FlagRead $Flags 6 Unused
 		FlagRead $Flags 7 Unused
@@ -357,7 +347,7 @@ proc readGDB {{magic "**TI83F*"}} {
 			16	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Xres } }
 			32	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Thetamin Thetamax Thetastep } }
 			64	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Tmin Tmax Tstep } }
-			128	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl PlotStart nMax u(1) v(1) nMin u(2) v(2) w(2) PlotStep w(1) } }
+			128	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl PlotStart nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) PlotStep w(nMin) } }
 		}
 	}
 	section "Numbers" {
@@ -367,24 +357,24 @@ proc readGDB {{magic "**TI83F*"}} {
 	}
 
 	switch -- $GraphMode {
-		16	{ set	values { Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0 } }
-		32	{ set	values { r1 r2 r3 r4 r5 r6 } }
-		64	{ set	values { X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T } }
-		128	{ set	values [expr {"$magic" == "**TI82**"} ?{ u v }:{ u v w }] }
+		16	{ set	equationSets { Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0 } }
+		32	{ set	equationSets { r1 r2 r3 r4 r5 r6 } }
+		64	{ set	equationSets { X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T } }
+		128	{ set	equationSets [expr {"$magic" == "**TI82**"} ?{ u v }:{ u v w }] }
 	}
 	section "Styles" {
-		foreach index $values {
+		foreach index $equationSets {
 			entryd	"$index Style" [uint8] 1 [dict create 0 Thin\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 Thick\ dotted\ line 7 Thin\ dotted\ line]
 		}
 	}
 	if {$GraphMode == 64} {
-		set	valuesAll { X1T Y1T X2T Y2T X3T Y3T X4T Y4T X5T Y5T X6T Y6T }
+		set	equationsAll { X1T Y1T X2T Y2T X3T Y3T X4T Y4T X5T Y5T X6T Y6T }
 	} else {
-		set	valuesAll $values
+		set	equationsAll $equationSets
 	}
 
 	section "Functions"
-	foreach index $valuesAll {
+	foreach index $equationsAll {
 		section $index {
 			# see https://wikiti.brandonw.net/index.php?title=83Plus:OS:System_Table#Entry_Parts
 			section -collapsed "Flags" {
@@ -413,19 +403,19 @@ proc readGDB {{magic "**TI83F*"}} {
 			9 LTBLUE 10 YELLOW 11 WHITE 12 LTGRAY \
 			13 MEDGRAY 14 GRAY 15 DARKGRAY 16 Off]
 
-			foreach index $values {
+			foreach index $equationSets {
 				entryd	"$index color" [uint8] 1 $oscolors
 			}
 			entryd	"Grid color" [uint8] 1 $oscolors
 			entryd	"Axes color" [uint8] 1 $oscolors
-			entryd	"Line style" [uint8] 1 [dict create 0 Thick 1 Dot-Thick 2 Thin 3 Dot-Thin]
+			entryd	"Global line style" [uint8] 1 [dict create 0 Thick 1 Dot-Thick 2 Thin 3 Dot-Thin]
 			uint8	"Border color"
 		}
 
 		section "Extended settings 2" {
 			set	Flags [hex 1]
 			sectionvalue $Flags
-			FlagRead $Flags 0 "Detect Asymptotes On" "Detect Asymptotes Off"
+			FlagRead $Flags 0 "Detect Asymptotes Off" "Detect Asymptotes On"
 			FlagRead $Flags 1 Unused
 			FlagRead $Flags 2 Unused
 			FlagRead $Flags 3 Unused
@@ -643,8 +633,9 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 			} else {
 				set	values { \
 				Xmin Xmax Xscl Ymin Ymax Yscl θmin θmax \
-				θstep Tmin Tmax Tstep PlotStart nMax u(1) v(1) \
-				nMin u(2) v(2) w(2) PlotStep Xres w(1) }
+				θstep Tmin Tmax Tstep PlotStart nMax u(nMin) \
+				v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) \
+				PlotStep w(nMin) }
 			}
 
 			if {$datatype == $Type(Window)} {
