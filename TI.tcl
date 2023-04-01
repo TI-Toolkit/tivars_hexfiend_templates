@@ -183,11 +183,11 @@ set	68KtypeDict [dict create \
 	0x0B "Text" \
 	0x0C "String" \
 	0x0D "Graph database" \
-	0x0E "Fig" \
+	0x0E "Figure" \
 	0x10 "Picture" \
 	0x12 "Program" \
 	0x13 "Function" \
-	0x14 "Mac" \
+	0x14 "Macro" \
 	0x18 "Clock" \
 	0x1A "Request Directory" \
 	0x1B "Local Directory" \
@@ -197,6 +197,9 @@ set	68KtypeDict [dict create \
 	0x20 "Get Certificate" \
 	0x21 "Assembly program" \
 	0x22 "ID-List" \
+	0x23 "OS" \
+	0x24 "App" \
+	0x25 "Certificate" \
 ]
 
 array set Type {
@@ -425,6 +428,44 @@ proc readGDB {{magic "**TI83F*"}} {
 			FlagRead $Flags 7 Unused
 		}
 	}
+}
+
+proc 68KreadBody {datatype {fallbacksize 0}} {
+	section	-collapsed Data
+	set	start [pos]
+	switch -- $datatype {
+		0x0B {
+			big_endian
+			uint16	"Cursor offset"
+			little_endian
+			set	delim [hex 1]
+			move	-1
+			while {$delim} {
+				set	LineStart [pos]
+				set	delim [hex 1]
+				section -collapsed Line {
+					while {$delim != 0 && $delim != 13} {
+						set delim [uint8]
+					}
+					move	-2
+					set	lineSize [expr [pos]-$LineStart]
+					goto	$LineStart
+					entryd	"Line type" [hex 1] 1 [dict create 0x0C Page\ Break 0x20 Normal 0x43 Command 0x50 Print\ object]
+					if {$lineSize} {
+						sectionvalue [ascii $lineSize "Line"]
+					} else {
+						entry Line ""
+					}
+					entryd	Deliminator [hex 1] 1 [dict create 0x00 EOF 0x0D Line\ End]
+				}
+			}
+			hex	1 "Magic? (E0)"
+		}
+		default {
+			hex	$fallbacksize "Data"
+		}
+	}
+	sectionvalue [expr [pos]-$start]\ bytes
 }
 
 
@@ -752,9 +793,8 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 				}
 				sectionname [dictsearch $datatype $68KtypeDict]\ entry
 				set retu [pos]
-				goto [expr $wheredata-2]
+				goto [expr $wheredata]
 				section "Body" {
-					hex	2 "Signature"
 					set	loopStart [pos]
 					section -collapsed "Data" {
 						hex	4 NULLs
@@ -764,7 +804,8 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 						move	-6
 						sectionvalue [hex [expr $Size+6]]
 						move	-$Size
-						hex	$Size "Data"
+						68KreadBody $datatype $Size
+						# hex	$Size "Data"
 					}
 					sectionvalue [expr $Size+10]\ bytes
 					CheckSum $loopStart [pos]
@@ -775,6 +816,7 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 		}
 	}
 	uint32	"File Size"
+	hex	2 "Body section magic"
 } else {
 	hex	2 "Thing"
 	entryd	"Owner Prod ID" [hex 1] 1 $ProdIDs
