@@ -291,8 +291,31 @@ proc ReadAppVar {} {
 		section -collapsed "Data"
 		sectionvalue [hex $datasize]
 		move	-$datasize
-		hex	5 CabriJr
-		hex	[expr $datasize-5] Data
+		hex	4 CabriJr
+		hex	1 Type ;# 0x46 | 0x66
+		set	struct [hex 1]
+		if {$struct==0x04} {
+			entry	Structure 4\ (Uncompressed) 1 [expr [pos]-1]
+			hex	1 Unknown
+			uint16	Unknown
+			hex	1 Unknown
+			set	n [uint8]
+			entry	"offset to name" [expr 21*$n] 1 [expr [pos]-1]
+			hex	[expr $datasize-11] Data
+		} else {
+			entry	Structure $struct\ (Compressed) 1 [expr [pos]-1]
+			# if Number==4 && Number2==90h: Type=66h
+			hex	1 Unread
+			set	n [hex 1] ;# needs neg if bit 7
+			entry	$n [format "0x%04X" [expr 2*$n+36]] 1 [expr [pos]-1]
+			set	n [hex 1]
+			entry	$n [format "0x%04X" [expr 2*$n+18]] 1 [expr [pos]-1]
+			# each block is 18 bytes
+			set	n [uint8 "Block count"]
+			for {set a 0} {$a < $n} {incr a} {
+				hex	18 Block\ $a
+			}
+		}
 		endsection
 	} elseif {$head == "\xf3\x47\xbf\xaf"} {
 		section -collapsed "Data"
@@ -304,7 +327,7 @@ proc ReadAppVar {} {
 		ascii	8 Name
 		uint16	Size
 		hex	6 Unknown
-		cstr	ascii Words
+		cstr	ascii Text
 		if {$datasize+$start-[pos] != 0} {
 			hex	[expr $datasize-[pos]+$start] Unknown
 		}

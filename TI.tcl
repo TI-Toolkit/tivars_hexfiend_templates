@@ -431,7 +431,7 @@ proc readGDB {{magic "**TI83F*"}} {
 }
 
 proc 68KreadBody {datatype {fallbacksize 0}} {
-	section	-collapsed Data
+	section -collapsed Data
 	set	start [pos]
 	switch -- $datatype {
 		0x0B {
@@ -441,11 +441,11 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 			set	delim [hex 1]
 			move	-1
 			while {$delim} {
-				set	LineStart [pos]
-				set	delim [hex 1]
 				section -collapsed Line {
+					set	LineStart [pos]
+					set	delim [hex 1]
 					while {$delim != 0 && $delim != 13} {
-						set delim [uint8]
+						set	delim [uint8]
 					}
 					move	-2
 					set	lineSize [expr [pos]-$LineStart]
@@ -454,7 +454,7 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 					if {$lineSize} {
 						sectionvalue [ascii $lineSize "Line"]
 					} else {
-						entry Line ""
+						entry	Line ""
 					}
 					entryd	Deliminator [hex 1] 1 [dict create 0x00 EOF 0x0D Line\ End]
 				}
@@ -466,12 +466,13 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 		}
 	}
 	sectionvalue [expr [pos]-$start]\ bytes
+	endsection
 }
 
 
 proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 	global	Type
-	section	-collapsed Data
+	section -collapsed Data
 	set	start [pos]
 
 	switch -- $datatype {
@@ -880,7 +881,7 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 					}
 				}
 
-				section	"Body" {
+				section "Body" {
 					if { $typeName == "Backup" } {
 						hex	[uint16 "Data 1 size"] "Data 1"
 						hex	[uint16 "Data 2 size"] "Data 2"
