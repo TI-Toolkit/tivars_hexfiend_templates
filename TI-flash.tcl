@@ -24,6 +24,7 @@ proc uint24l {a {b -1}} {
 proc Field_Names {value} {
 	# 024 CE OSs
 	# 035 cert (030000)
+	# 0C1 exam mode something
 	# 80D
 	# 80E CE OS
 	return [switch -- $value {

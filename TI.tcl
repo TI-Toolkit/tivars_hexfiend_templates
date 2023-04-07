@@ -30,6 +30,18 @@ if {[file exists [file join $ThisDirectory AppVar.txt]]} {
 	}
 }
 
+if {[file exists [file join $ThisDirectory "68KRPN.txt"]]} {
+	source	[file join $ThisDirectory "68KRPN.txt"]
+} else {
+	proc 68KRPN {datasize} {
+		if {$datasize} {
+			hex	$datasize "Data"
+		} else {
+			entry	"Data" "empty"
+		}
+	}
+}
+
 proc main_guard {body} {
 	if [catch {
 		uplevel	1 $body
@@ -256,9 +268,7 @@ proc readTINumb {{index ""}} {
 		set	Power [expr [uint8]-128]
 		set	First [uint8]
 		set	First [expr $First/16].[expr $First%16]
-		big_endian
 		set	Body $First[format "%012X" [hex 6]]
-		little_endian
 		entry	"TI-F$Name $index" "$Sign$Body\e$Power$Bits" 9 [expr [pos]-9]
 
 		if {!$recursed && (($bitbyte & 0x0E)==0x0C ||
@@ -376,7 +386,7 @@ proc readGDB {{magic "**TI83F*"}} {
 		set	equationsAll $equationSets
 	}
 
-	section "Functions"
+	section Equations
 	foreach index $equationsAll {
 		section $index {
 			# see https://wikiti.brandonw.net/index.php?title=83Plus:OS:System_Table#Entry_Parts
@@ -434,6 +444,16 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 	section -collapsed Data
 	set	start [pos]
 	switch -- $datatype {
+		0x00 -
+		0x04 -
+		0x06 -
+		0x0C -
+		0x12 -
+		0x13 {
+			# RPN-TAG formats
+			# hex	$fallbacksize Data
+			68KRPN	$fallbacksize
+		}
 		0x0B {
 			big_endian
 			uint16	"Cursor offset"
@@ -459,10 +479,10 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 					entryd	Deliminator [hex 1] 1 [dict create 0x00 EOF 0x0D Line\ End]
 				}
 			}
-			hex	1 "Magic? (E0)"
+			hex	1 "TEXT_TAG (E0)"
 		}
 		default {
-			hex	$fallbacksize "Data"
+			hex	$fallbacksize Data
 		}
 	}
 	sectionvalue [expr [pos]-$start]\ bytes
@@ -786,29 +806,24 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 				section "Header" {
 					sectionvalue "16 bytes"
 					set	wheredata [uint32 "Offset to data"]
-					set	name [ascii 8 "Name"]
+					set	name [ascii 8 Name]
 					set	datatype [hex 1]
 					entryd	"Type" $datatype 1 $68KtypeDict
-					uint8	"Attribute"
-					hex	2 "Unused"
+					# are these flags?
+					entryd	Attribute [hex 1] 1 [dict create 0x01 Locked 0x02 Archived]
+					uint16	"Items in dir"
 				}
 				sectionname [dictsearch $datatype $68KtypeDict]\ entry
 				set retu [pos]
 				goto [expr $wheredata]
 				section "Body" {
 					set	loopStart [pos]
-					section -collapsed "Data" {
-						hex	4 NULLs
-						big_endian
-						set	Size [uint16 Size]
-						little_endian
-						move	-6
-						sectionvalue [hex [expr $Size+6]]
-						move	-$Size
-						68KreadBody $datatype $Size
-						# hex	$Size "Data"
-					}
-					sectionvalue [expr $Size+10]\ bytes
+					hex	4 NULLs
+					big_endian
+					set	Size [uint16 Data\ size]
+					little_endian
+					68KreadBody $datatype $Size
+					sectionvalue [expr $Size+8]\ bytes
 					CheckSum $loopStart [pos]
 				}
 				sectionvalue "$name - [expr $Size+10] bytes"
