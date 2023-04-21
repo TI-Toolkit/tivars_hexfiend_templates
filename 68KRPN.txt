@@ -333,6 +333,15 @@ set 68KRPN_TAGS [dict create \
 			set expression [Recursive_RPN $expression]
 			endsection
 		}
+		SIGMA_SUM {
+			section $tag_name
+			section Expr {Recursive_RPN $expression}
+			section Var {Recursive_RPN $expression}
+			section Start {Recursive_RPN $expression}
+			section End {Recursive_RPN $expression}
+			Recursive_RPN $expression ;# END_TAG
+			endsection
+		}
 	}
 	return $expression
 }

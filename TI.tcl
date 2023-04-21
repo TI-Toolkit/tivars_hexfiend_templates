@@ -42,6 +42,18 @@ if {[file exists [file join $ThisDirectory "68KRPN.txt"]]} {
 	}
 }
 
+if {[file exists [file join $ThisDirectory "BAZIC85.txt"]]} {
+	source	[file join $ThisDirectory "BAZIC85.txt"]
+} else {
+	proc BAZIC85 {datasize} {
+		if {$datasize} {
+			hex	$datasize "Data"
+		} else {
+			entry	"Data" "empty"
+		}
+	}
+}
+
 proc main_guard {body} {
 	if [catch {
 		uplevel	1 $body
@@ -489,6 +501,53 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 	endsection
 }
 
+proc 85readBody {datatype {fallbacksize 0}} {
+	section -collapsed Data
+	set	start [pos]
+	switch -- $datatype {
+		0x0C {
+			ascii	[uint16	Data\ size] Data
+		}
+		0x12 {
+			set	datasize [uint16 "Code size"]
+			set	posset [pos]
+			set	assembly 0
+			if {$datasize > 1} {
+				set	assembly [hex 2]
+				move	-2
+				set	AllData [hex $datasize]
+				goto	$posset
+			}
+			if {$assembly == 0x8E27} {
+				section -collapsed Code {
+					hex 2 Literal\ Assembly
+					ascii [expr $datasize-2] Code
+				}
+			} elseif {$assembly == 0x8E28} {
+				section -collapsed Code {
+					hex 2 Compiled\ Assembly
+					hex [expr $datasize-2] Code
+				}
+			} elseif {$assembly == 0x8E29} {
+				hex 2 Edit-Lock
+				BAZIC85 [expr $datasize-2]
+			} elseif {$assembly == 0x0000} { # Untokenized
+				section -collapsed Code {
+					hex 2 Untokenized
+					ascii [expr $datasize-2] Code
+				}
+			} else {
+				BAZIC85	$datasize
+			}
+		}
+		default {
+			hex	$fallbacksize Data
+		}
+	}
+	sectionvalue [expr [pos]-$start]\ bytes
+	endsection
+}
+
 
 proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 	global	Type
@@ -903,8 +962,8 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 						hex	[uint16 "Data 3 size"] "Data 3"
 					} elseif { $magic=="**TI85**" || $magic=="**TI86**" } {
 						set	datasize [uint16 "Data size"]
-						hex	$datasize Data
-						# T85readBody $datatype $datasize
+						# hex	$datasize Data
+						85readBody $datatype $datasize
 					} else {
 						set	datasize [uint16 "Data size"]
 						Z80readBody $datatype $magic $datasize
