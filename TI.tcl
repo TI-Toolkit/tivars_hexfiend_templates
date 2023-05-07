@@ -88,7 +88,7 @@ proc dictsearch {b d} {
 	return	$e
 }
 
-proc FlagRead {Flag bit {name unused/unknown} {notname -1}} {
+proc FlagRead {Flag bit {name Unused/Unknown} {notname -1}} {
 	if {($Flag & (1 << $bit)) != 0} {
 		if {$name != -1} {
 			entry Bit\ $bit $name 1 [expr [pos] - 1]
@@ -353,11 +353,9 @@ proc readGDB {{magic "**TI83F*"}} {
 		} else {
 			entry Bits\ 1&2 "SEQ(n)" 1 [expr [pos] - 1]
 		}
-		FlagRead $Flags 3 Unused
-		FlagRead $Flags 4 Unused
-		FlagRead $Flags 5 Unused
-		FlagRead $Flags 6 Unused
-		FlagRead $Flags 7 Unused
+		foreach a {3 4 5 6 7} {
+			FlagRead $Flags $a Unused
+		}
 	}
 
 	if {$magic == "**TI82**"} {
@@ -441,13 +439,9 @@ proc readGDB {{magic "**TI83F*"}} {
 			set	Flags [hex 1]
 			sectionvalue $Flags
 			FlagRead $Flags 0 "Detect Asymptotes Off" "Detect Asymptotes On"
-			FlagRead $Flags 1 Unused
-			FlagRead $Flags 2 Unused
-			FlagRead $Flags 3 Unused
-			FlagRead $Flags 4 Unused
-			FlagRead $Flags 5 Unused
-			FlagRead $Flags 6 Unused
-			FlagRead $Flags 7 Unused
+			foreach a {1 2 3 4 5 6 7} {
+				FlagRead $Flags $a Unused
+			}
 		}
 	}
 }
@@ -583,7 +577,8 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 			}
 		}
 		0x03 -
-		0x04 {
+		0x04 -
+		0x0B {
 			set	datasize [uint16 "Code size"]
 			BAZIC	$datasize
 		}
@@ -799,24 +794,34 @@ proc SysTab {size magic} {
 	section -collapsed "System table entry" {
 		set	Flags [hex 1]
 		section -collapsed "Type" {
-			if {($Flags & 23) != 3} {
-				set	subtype [format "0x%02X" [expr $Flags & 63]]
-			} else {
+			set	subtype [format "0x%02X" [expr $Flags & 63]]
+			# legacy Z80 equations use bit 5 for selection
+			if {($Flags & 23) == 3} {
 				set	subtype [format "0x%02X" [expr $Flags & 31]]
 			}
 			entryd	"Type" $subtype 1 $Z80typeDict
 			set	typename [dictsearch $subtype $Z80typeDict]
 			sectionvalue $Flags\ ($typename)
 			if {($Flags & 23) == 3} {
-				FlagRead $Flags 5 Selected Unselected
+				FlagRead $Flags 5 "Selected Z80" "Unselected Z80"
 			}
 			FlagRead $Flags 6 "Was used for graph"
+			# always reset
 			FlagRead $Flags 7 "Link transfer flag"
 		}
-		hex	1 "Reserved"
+		set	Flags [hex 1]
+		section -collapsed Reserved {
+			sectionvalue $Flags
+			FlagRead $Flags 0 "Selected eZ80" "Unselected eZ80"
+			foreach a {1 2 3 4 5 6 7} {
+				FlagRead $Flags $a
+			}
+		}
 		hex	1 "Version"
-		hex	2 "Structure pointer"
-		entryd	"Archive status" [uint8] 1 [dict create 0 "Unarchived" 128 "Archived"]
+		# unread garbage in groups
+		entry	"Structure pointer" [format "0x%02X" [uint16]] 2 [expr [pos]-2]
+		# should always(?) be zero in groups
+		hex	1 "Page"
 		set	length [uint8]
 		move	-1
 		if {$length < 9 && $length != 0} {
