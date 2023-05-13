@@ -743,15 +743,19 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 			set	datasize [uint16 "Data size"]
 			if {$magic == "**TI82**"} {
 				set	values { \
-				Xmin Xmax Xscl Ymin Ymax Yscl θmin θmax \
-				θstep Tmin Tmax Tstep nMin nMax \
-				UnStart VnStart nStart }
+				Xmin Xmax Xscl Ymin Ymax Yscl \
+				Thetamin Thetamax Thetastep \
+				Tmin Tmax Tstep \
+				nMin nMax UnStart VnStart nStart }
 			} else {
 				set	values { \
-				Xmin Xmax Xscl Ymin Ymax Yscl θmin θmax \
-				θstep Tmin Tmax Tstep PlotStart nMax u(nMin) \
-				v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) \
-				PlotStep w(nMin) }
+				Xmin Xmax Xscl Ymin Ymax Yscl \
+				Thetamin Thetamax Thetastep \
+				Tmin Tmax Tstep \
+				PlotStart \
+				nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) \
+				PlotStep Xres \
+				w(nMin) }
 			}
 
 			if {$datatype == $Type(Window)} {
@@ -788,10 +792,71 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 	endsection
 }
 
+if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
+	proc getNameZ80 {title length} {
+		set	start [pos]
+		set	a [hex 1]
+		set	b [uint8]
+		move	-2
+		# the `Ans` token is 0x72, which is ascii `r` (CEmu handles this incorrectly)
+		# the only way to tell what 072h,0 is is by context
+		if {$a == 0} {
+			set	name "\[none]"
+		} elseif {($a == 0x3C) && $b < 10} {
+			# annoyingly, images have their own "tokenizations"
+			set	name Image[expr ($b+1)%10]
+		} elseif {$a == 0x5E} {
+			set	name [BAZIC_GetToken "" [hex 1] 0]
+		} elseif {$a == 0x5D && $b < 6} {
+			set	name [BAZIC_GetToken "" [hex 1] 0]
+		} elseif {($a == 0x5C || $a == 0x60 || $a == 0x61 || $a == 0xAA) && $b < 10} {
+			set	name [BAZIC_GetToken "" [hex 1] 0]
+		} elseif {$a == 0x62 && $b == 33} {
+			set	name "\[recursiven]"
+		} else {
+			# crude font "simulation"
+			set	name [string map {[ θ} [ascii $length]]
+			# it seems that some lists have the |L and some don't
+			set	name [string map {] |L} $name]
+		}
+		goto	$start
+		entry	$title $name $length [pos]
+		move	$length
+		if {$name != "\[none]"} {
+			return	$name
+		} else {
+			return	""
+		}
+	}
+} else {
+	proc getNameZ80 {title length} {
+		set	start [pos]
+		set	a [hex 1]
+		move	-1
+		if {$a == 0} {
+			set	name "\[none]"
+		} else {
+			set	name [string map {[ θ} [ascii $length]]
+			set	name [string map {] |L} $name]
+		}
+		goto	$start
+		entry	$title $name $length [pos]
+		move	$length
+		if {$name != "\[none]"} {
+			return	$name
+		} else {
+			return	""
+		}
+	}
+}
+
+
+
 proc SysTab {size magic} {
 	global	Z80typeDict
 	set	EntryStart [pos]
-	section -collapsed "System table entry" {
+	section "Entry" {
+		section "System table entry"
 		set	Flags [hex 1]
 		section -collapsed "Type" {
 			set	subtype [format "0x%02X" [expr $Flags & 63]]
@@ -818,20 +883,33 @@ proc SysTab {size magic} {
 			}
 		}
 		hex	1 "Version"
-		# unread garbage in groups
+		# unused garbage in groups
 		entry	"Structure pointer" [format "0x%02X" [uint16]] 2 [expr [pos]-2]
 		# should always(?) be zero in groups
 		hex	1 "Page"
-		set	length [uint8]
-		move	-1
-		if {$length < 9 && $length != 0} {
-			uint8	"Name length"
-			ascii	$length "Name data"
-		} else {
-			hex	3 "Name data"
+		section -collapsed "Name" {
+			set	length [uint8]
+			move	-1
+			if {$length < 9 && $length != 0} {
+				uint8	"Name length"
+			} else {
+				set	length 3
+			}
+			set	name [getNameZ80 "Name data" $length]
+			if {$name == ""} {
+				sectionvalue "\[none]"
+			} else {
+				sectionvalue $name
+			}
 		}
+		endsection
 		Z80readBody $subtype $magic $size
-		sectionvalue "$typename - [expr [pos]-$EntryStart] bytes"
+		if {$name == ""} {
+			sectionvalue "[expr [pos]-$EntryStart] bytes"
+		} else {
+			sectionvalue "$name - [expr [pos]-$EntryStart] bytes"
+		}
+		sectionname $typename\ entry
 	}
 }
 
@@ -940,10 +1018,7 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 						} else {
 							set	typeName [dictsearch $datatype $Z80typeDict]
 							entryd	"Type" $datatype 1 $Z80typeDict
-							# TODO: file name decoder
-							set	name [string map {[ θ} [ascii 8]]
-							set	name [string map {] |L} $name]
-							entry	"Name" $name 8 [expr [pos]-8]
+							set	name [getNameZ80 Name 8]
 							if {$bodyOffset == 13} {
 								hex	1 Version
 								section -collapsed "Flags" {
@@ -977,7 +1052,6 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 				}
 
 				sectionname $typeName\ entry
-
 
 				if {$name == ""} {
 					sectionvalue "[expr [pos]-$headStart] bytes"
