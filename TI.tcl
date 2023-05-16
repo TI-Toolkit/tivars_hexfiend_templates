@@ -226,48 +226,12 @@ set	68KtypeDict [dict create \
 	0x25 "Certificate" \
 ]
 
-array set Type {
-	Real	0
-	RList	1
-	Matrix	2
-	Equ	3
-	Str	4
-	Prgm	5
-	PPrgm	6
-	Pic	7
-	GDB	8
-	NEqu	11
-	Cplx	12
-	CList	13
-	CMatrix	14
-	Window	15
-	Zoom	16
-	TSet	17
-	AppVar	21
-	TPrgm	22
-	Group	23
-	Frac	24
-	Dir	25
-	Image	26
-	CFrac	27
-	RRad	28
-	CRad	29
-	CPi	30
-	CPiFrac	31
-	RPi	32
-	RPiFrac	33
-	AMS	35
-	App	36
-}
-
-
 proc readTINumb {{index ""}} {
 	proc readTIFloat {{index ""} {recursed 0}} {
-		global	Type
 		set	bitbyte [uint8]
 		set	typebyte [expr ($bitbyte & 127) > 15 ?($bitbyte & 127):($bitbyte & 2)?0:($bitbyte & 12)]
 
-		if {$typebyte == $Type(RRad) || $typebyte == $Type(CRad)} {
+		if {$typebyte == 28 || $typebyte == 29} {
 			move	-1
 			readTIRadical $index $recursed
 			return
@@ -284,13 +248,12 @@ proc readTINumb {{index ""}} {
 		entry	"TI-F$Name $index" "$Sign$Body\e$Power$Bits" 9 [expr [pos]-9]
 
 		if {!$recursed && (($bitbyte & 0x0E)==0x0C ||
-		$typebyte == $Type(CFrac) || $typebyte == $Type(CPi) || $typebyte == $Type(CPiFrac))} {
+		$typebyte == 27 || $typebyte == 30 || $typebyte == 31)} {
 			readTIFloat "$index\c" 1
 		}
 	}
 
 	proc readTIRadical {{index ""} {recursed 0}} {
-		global	Type
 		set	typebyte [uint8]
 		big_endian
 		set	Body [format "%016X" [hex 8]]
@@ -306,8 +269,8 @@ proc readTINumb {{index ""}} {
 		set	N2 [string range $Body 13 15]
 		entry	"TI-Radical $index" "($N1√$N2$N3√$N4)/$N5" 9 [expr [pos]-9]
 
-		if {!$recursed && ($typebyte == $Type(CFrac) ||
-		$typebyte == $Type(CRad) || $typebyte == $Type(CPi) || $typebyte == $Type(CPiFrac))} {
+		if {!$recursed && ($typebyte == 27 ||
+		$typebyte == 29 || $typebyte == 30 || $typebyte == 33)} {
 			readTIRadical "$index\c" 1
 			# should this be readTIFloat?
 		}
@@ -544,7 +507,6 @@ proc 85readBody {datatype {fallbacksize 0}} {
 
 
 proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
-	global	Type
 	section -collapsed Data
 	set	start [pos]
 
@@ -758,10 +720,10 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 				w(nMin) }
 			}
 
-			if {$datatype == $Type(Window)} {
-				uint8	"Null"
+			if {$datatype == 0x0F} {
+				uint8	"Reserved" ;# always zero
 			}
-			if {$datatype == $Type(TSet)} {
+			if {$datatype == 0x11} {
 				set	values { TblStart DeltaTbl }
 			}
 			foreach index $values {
@@ -793,31 +755,46 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 }
 
 if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
-	proc getNameZ80 {title length} {
+	proc getNameZ80 {title type length} {
 		set	start [pos]
-		set	a [hex 1]
-		set	b [uint8]
-		move	-2
-		# the `Ans` token is 0x72, which is ascii `r` (CEmu handles this incorrectly)
-		# the only way to tell what 072h,0 is is by context
-		if {$a == 0} {
-			set	name "\[none]"
-		} elseif {($a == 0x3C) && $b < 10} {
-			# annoyingly, images have their own "tokenizations"
-			set	name Image[expr ($b+1)%10]
-		} elseif {$a == 0x5E} {
-			set	name [BAZIC_GetToken "" [hex 1] 0]
-		} elseif {$a == 0x5D && $b < 6} {
-			set	name [BAZIC_GetToken "" [hex 1] 0]
-		} elseif {($a == 0x5C || $a == 0x60 || $a == 0x61 || $a == 0xAA) && $b < 10} {
-			set	name [BAZIC_GetToken "" [hex 1] 0]
-		} elseif {$a == 0x62 && $b == 33} {
-			set	name "\[recursiven]"
-		} else {
-			# crude font "simulation"
-			set	name [string map {[ θ} [ascii $length]]
-			# it seems that some lists have the |L and some don't
-			set	name [string map {] |L} $name]
+		switch -- $type {
+			0x01 -
+			0x0D {
+				int8
+				set	a [hex 1]
+				move	-2
+				if {$a < 6} {
+					set	name [BAZIC_GetToken "" [hex 1] 0]
+				} elseif {$a == 0x40} {
+					set	name "IDList"
+				} else {
+					set	name [string map {[ θ ] |L} [ascii $length]]
+				}
+			}
+			0x05 -
+			0x06 -
+			0x15 -
+			0x17 {
+				# crude font "simulation"
+				set	name [string map {[ θ} [ascii $length]]
+			}
+			0x0F -
+			0x10 -
+			0x11 {
+				array set r {0x0F Window 0x10 RclWindow 0x11 TblSet}
+				set	name [ascii $length]
+				set	name [expr {$name==""?$r($type):"$name ($r($type))"}]
+			}
+			0x1A {
+				# annoyingly, images have their own "tokenizations"
+				# first byte should be 03Ch (which I ignore, obviously)
+				# should be 0EF50h + [uint8], but I don't have arbitrary detok
+				uint8
+				set	name Image[expr ([uint8]+1)%10]
+			}
+			default {
+				set	name [BAZIC_GetToken "" [hex 1] 0]
+			}
 		}
 		goto	$start
 		entry	$title $name $length [pos]
@@ -829,15 +806,14 @@ if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
 		}
 	}
 } else {
-	proc getNameZ80 {title length} {
+	proc getNameZ80 {title type length} {
 		set	start [pos]
 		set	a [hex 1]
 		move	-1
 		if {$a == 0} {
 			set	name "\[none]"
 		} else {
-			set	name [string map {[ θ} [ascii $length]]
-			set	name [string map {] |L} $name]
+			set	name [string map {[ θ ] |L} [ascii $length]]
 		}
 		goto	$start
 		entry	$title $name $length [pos]
@@ -895,7 +871,7 @@ proc SysTab {size magic} {
 			} else {
 				set	length 3
 			}
-			set	name [getNameZ80 "Name data" $length]
+			set	name [getNameZ80 "Name data" $subtype $length]
 			if {$name == ""} {
 				sectionvalue "\[none]"
 			} else {
@@ -929,6 +905,11 @@ if {[len] < 8} {
 	requires 0 0
 }
 set	magic [ascii 8 Magic]
+if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]} {
+	move -8
+	source	[file join $ThisDirectory TI-Flash.tcl]
+	return
+}
 if {$magic!="**TI73**" && $magic!="**TI82**" && $magic!="**TI83**" && $magic!="**TI83F*" && \
     $magic!="**TI89**" && $magic!="**TI92**" && $magic!="**TI92P*" && \
     $magic!="**TI85**" && $magic!="**TI86**"} {
@@ -1018,7 +999,7 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 						} else {
 							set	typeName [dictsearch $datatype $Z80typeDict]
 							entryd	"Type" $datatype 1 $Z80typeDict
-							set	name [getNameZ80 Name 8]
+							set	name [getNameZ80 Name $datatype 8]
 							if {$bodyOffset == 13} {
 								hex	1 Version
 								section -collapsed "Flags" {
