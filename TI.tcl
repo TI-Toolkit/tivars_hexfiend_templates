@@ -3,6 +3,12 @@
 # (c) 2021-2023 LogicalJoe
 
 
+proc size_field {{title Data}} {
+	set	s [uint16]
+	entry	"$title size" $s\ byte[expr $s-1?"s":""] 2 [expr [pos]-2]
+	return	$s
+}
+
 variable ThisDirectory [file dirname [file normalize [info script]]]
 
 if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
@@ -10,9 +16,9 @@ if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
 } else {
 	proc BAZIC {datasize} {
 		if {$datasize} {
-			hex	$datasize "Data"
+			bytes	$datasize Code
 		} else {
-			entry	"Data" "empty"
+			entry	"Code" ""
 		}
 	}
 }
@@ -21,11 +27,11 @@ if {[file exists [file join $ThisDirectory AppVar.txt]]} {
 	source	[file join $ThisDirectory AppVar.txt]
 } else {
 	proc ReadAppVar {} {
-		set	datasize [uint16 "Data size"]
+		set	datasize [size_field]
 		if {$datasize} {
-			hex	$datasize "Data"
+			bytes	$datasize "Data"
 		} else {
-			entry	"Data" "empty"
+			entry	"Data" ""
 		}
 	}
 }
@@ -54,13 +60,11 @@ if {[file exists [file join $ThisDirectory "BAZIC85.txt"]]} {
 	}
 }
 
-proc main_guard {body} {
-	if [catch {
-		uplevel	1 $body
-	}] {
-		uplevel	1 { entry "FATAL" "Somthin' hap'ned" }
-	}
-}
+# proc main_guard {body} {
+#	if [catch { uplevel 1 $body }] {
+#		uplevel	1 { entry "FATAL" "Somthin' hap'ned" }
+#	}
+# }
 
 # entryd label value length dict
 # TODO: offset?
@@ -226,7 +230,7 @@ set	68KtypeDict [dict create \
 	0x25 "Certificate" \
 ]
 
-proc readTINumb {{index ""}} {
+proc readZ80Numb {{index ""}} {
 	proc readTIFloat {{index ""} {recursed 0}} {
 		set	bitbyte [uint8]
 		set	typebyte [expr ($bitbyte & 127) > 15 ?($bitbyte & 127):($bitbyte & 2)?0:($bitbyte & 12)]
@@ -269,8 +273,7 @@ proc readTINumb {{index ""}} {
 		set	N2 [string range $Body 13 15]
 		entry	"TI-Radical $index" "($N1√$N2$N3√$N4)/$N5" 9 [expr [pos]-9]
 
-		if {!$recursed && ($typebyte == 27 ||
-		$typebyte == 29 || $typebyte == 30 || $typebyte == 33)} {
+		if {!$recursed && ($typebyte in {27 29 30 33})} {
 			readTIRadical "$index\c" 1
 			# should this be readTIFloat?
 		}
@@ -281,9 +284,9 @@ proc readTINumb {{index ""}} {
 
 proc readGDB {{magic "**TI83F*"}} {
 	global	Z80typeDict
-	set	datasize [uint16 "Data size"]
+	set	datasize [size_field]
 	set	start [pos]
-	uint8	"NULL"
+	uint8	Reserved ;# always zero
 	set	GraphMode [uint8]
 	entryd	"Graph mode flag" $GraphMode 1 [dict create 16 Function 32 Polar 64 Parametric 128 Sequence]
 	section "Format flags" {
@@ -338,7 +341,7 @@ proc readGDB {{magic "**TI83F*"}} {
 	}
 	section "Numbers" {
 		foreach index $values {
-			readTINumb $index
+			readZ80Numb $index
 		}
 	}
 
@@ -375,7 +378,7 @@ proc readGDB {{magic "**TI83F*"}} {
 				FlagRead $Flags 6 "Was used for graph"
 				FlagRead $Flags 7 "Link transfer flag"
 			}
-			BAZIC	[uint16 "Size"]
+			BAZIC	[size_field Code]
 		}
 	}
 	endsection
@@ -420,7 +423,7 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 		0x12 -
 		0x13 {
 			# RPN-TAG formats
-			# hex	$fallbacksize Data
+			# bytes	$fallbacksize Data
 			68KRPN	$fallbacksize
 		}
 		0x0B {
@@ -451,57 +454,54 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 			hex	1 "TEXT_TAG (E0)"
 		}
 		default {
-			hex	$fallbacksize Data
+			bytes	$fallbacksize Data
 		}
 	}
-	sectionvalue [expr [pos]-$start]\ bytes
 	endsection
 }
 
 proc 85readBody {datatype {fallbacksize 0}} {
 	section -collapsed Data
 	set	start [pos]
+
 	switch -- $datatype {
 		0x0C {
-			ascii	[uint16	Data\ size] Data
+			ascii	[size_field Data] Data
 		}
 		0x12 {
-			set	datasize [uint16 "Code size"]
+			set	datasize [size_field Code]
 			set	posset [pos]
 			set	assembly 0
 			if {$datasize > 1} {
 				set	assembly [hex 2]
 				move	-2
-				set	AllData [hex $datasize]
-				goto	$posset
 			}
 			if {$assembly == 0x8E27} {
 				section -collapsed Code {
-					hex 2 Literal\ Assembly
-					ascii [expr $datasize-2] Code
+					hex	2 Literal\ Assembly
+					ascii	[expr $datasize-2] Code
 				}
 			} elseif {$assembly == 0x8E28} {
 				section -collapsed Code {
-					hex 2 Compiled\ Assembly
-					hex [expr $datasize-2] Code
+					hex	2 Compiled\ Assembly
+					bytes	[expr $datasize-2] Code
 				}
 			} elseif {$assembly == 0x8E29} {
-				hex 2 Edit-Lock
+				hex	2 Edit-Lock
 				BAZIC85 [expr $datasize-2]
 			} elseif {$assembly == 0x0000} { # Untokenized
 				section -collapsed Code {
-					hex 2 Untokenized
-					ascii [expr $datasize-2] Code
+					hex	2 Untokenized
+					ascii	[expr $datasize-2] Code
 				}
 			} else {
 				BAZIC85	$datasize
 			}
 		}
 		default {
-			hex	$fallbacksize Data
+			bytes	$fallbacksize Data
 		}
 	}
-	sectionvalue [expr [pos]-$start]\ bytes
 	endsection
 }
 
@@ -521,13 +521,13 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 		0x1F -
 		0x20 -
 		0x21 {
-			readTINumb
+			readZ80Numb
 		}
 		0x01 -
 		0x0D {
 			set	n [uint16 "Indices"]
 			for {set a 0} {$n > $a} {incr a} {
-				readTINumb [expr $a+1]
+				readZ80Numb [expr $a+1]
 			}
 		}
 		0x02 -
@@ -535,31 +535,28 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 			set	Width [expr [uint8 "Width"]]
 			set	Height [expr [uint8 "Height"]]
 			for {set a 0} {$a<$Width*$Height} {incr a} {
-				readTINumb "[expr 1+$a/$Width] [expr 1+$a%$Width]"
+				readZ80Numb "[expr 1+$a/$Width] [expr 1+$a%$Width]"
 			}
 		}
 		0x03 -
 		0x04 -
 		0x0B {
-			set	datasize [uint16 "Code size"]
+			set	datasize [size_field Code]
 			BAZIC	$datasize
 		}
 		0x05 -
 		0x06 {
-			set	datasize [uint16 "Code size"]
+			set	datasize [size_field Code]
 			set	posset [pos]
 			set	assembly 0
 			if {$datasize > 1} {
 				set	assembly [hex 2]
 				move	-2
-				set	AllData [hex $datasize]
-				goto	$posset
 			}
 
 			if {$assembly == 0xBB6D} { # 8\[43\]P? Z80
 				section -collapsed Code {
-					sectionvalue $AllData
-					hex	2 "Assembly"
+					hex	2 "Z80 token"
 					set	b1 [uint8]
 					if {$b1==201} { # ret
 						# http://www.detachedsolutions.com/mirageos/develop/
@@ -594,19 +591,17 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 							cstr	ascii "Description"
 						}
 					}
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} elseif {$assembly == 0xC930} { # `ret / jr nc` for 83 ION
 				section -collapsed Code {
-					sectionvalue $AllData
 					hex	1 "83 ION"
 					hex	2 "jr nc"
 					cstr	ascii "Description"
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} elseif {$assembly == 0x0018} { # `nop / jr` 83 ASHELL
 				section -collapsed Code {
-					sectionvalue $AllData
 					# Wolfenstein 3D
 					hex	1 "ASHELL83"
 					hex	2 "jr"
@@ -614,31 +609,28 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 					hex	2 "Description pointer"
 					hex	2 "Icon pointer"
 					hex	2 "For future use"
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} elseif {$assembly == 0x3F18} { # `ccf / jr` 83 TI-Explorer
 				section -collapsed Code {
-					sectionvalue $AllData
 					hex	1 "TI-Explorer"
 					hex	2 "jr"
 					hex	2 "Table version"
 					hex	2 "Description pointer"
 					hex	2 "Icon pointer"
 					hex	1 "ret"
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} elseif {$assembly == 0xAF28} { # `xor a / jr z` 83 SOS
 				section -collapsed Code {
-					sectionvalue $AllData
 					hex	1 "83 SOS"
 					hex	2 "jr z"
 					hex	2 "Libraries"
 					hex	2 "Description pointer"
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} elseif {$assembly == 0xEF7B} { # CE eZ80
 				section -collapsed Code {
-					sectionvalue $AllData
 					hex	2 "eZ80"
 					set	eZtype [uint8]
 					move	-1
@@ -665,36 +657,32 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 							cstr	ascii "Description"
 						}
 					}
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} elseif {$assembly == 0xD900} { # `Stop;nop` mallard
 				section -collapsed Code {
-					sectionvalue $AllData
 					hex	6 "Mallard"
 					uint16	-hex "Start address"
 					cstr	ascii "Description"
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} elseif {$assembly == 0xD500} { # `Return;nop` crash
 				section -collapsed Code {
-					sectionvalue $AllData
 					hex	3 "Crash"
 					cstr	ascii "Description"
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} elseif {$assembly == 0xEF69} { # CSE
 				section -collapsed Code {
-					sectionvalue $AllData
 					hex	2 "Assembly"
-					hex	[expr $datasize+$posset-[pos]] "Data"
+					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
 			} else {
 				BAZIC	$datasize
 			}
 		}
 		0x07 {
-			set	datasize [uint16 "Data size"]
-			hex	$datasize "Data"
+			bytes	[size_field] "Data"
 		}
 		0x08 {
 			readGDB $magic
@@ -702,7 +690,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 		0x0F -
 		0x10 -
 		0x11 {
-			set	datasize [uint16 "Data size"]
+			set	datasize [size_field]
 			if {$magic == "**TI82**"} {
 				set	values { \
 				Xmin Xmax Xscl Ymin Ymax Yscl \
@@ -727,30 +715,28 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 				set	values { TblStart DeltaTbl }
 			}
 			foreach index $values {
-				readTINumb $index
+				readZ80Numb $index
 			}
 		}
 		0x15 {
 			ReadAppVar
 		}
 		0x17 {
-			set	subsize [uint16 "Data size"]
+			set	subsize [size_field]
 			whiless $subsize {
 				SysTab	$subsize $magic
 			}
 		}
 		0x1A {
-			set	datasize [uint16 "Data size"]
+			set	datasize [size_field]
 			hex	1 "Magic 0x81"
-			incr	datasize -1
-			hex	$datasize "Data"
+			bytes	[expr $datasize-1] "Data"
 		}
 		default {
-			hex	$fallbacksize "Data"
+			bytes	$fallbacksize "Data"
 		}
 	}
 
-	sectionvalue [expr [pos]-$start]\ bytes
 	endsection
 }
 
@@ -764,7 +750,7 @@ if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
 				set	a [hex 1]
 				move	-2
 				if {$a < 6} {
-					set	name [BAZIC_GetToken "" [hex 1] 0]
+					set	name [BAZIC_GetToken [hex 1] 0]
 				} elseif {$a == 0x40} {
 					set	name "IDList"
 				} else {
@@ -793,7 +779,7 @@ if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
 				set	name Image[expr ([uint8]+1)%10]
 			}
 			default {
-				set	name [BAZIC_GetToken "" [hex 1] 0]
+				set	name [BAZIC_GetToken [hex 1] 0]
 			}
 		}
 		goto	$start
@@ -905,20 +891,12 @@ if {[len] < 8} {
 	requires 0 0
 }
 set	magic [ascii 8 Magic]
+
 if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]} {
 	move -8
 	source	[file join $ThisDirectory TI-Flash.tcl]
 	return
-}
-if {$magic!="**TI73**" && $magic!="**TI82**" && $magic!="**TI83**" && $magic!="**TI83F*" && \
-    $magic!="**TI89**" && $magic!="**TI92**" && $magic!="**TI92P*" && \
-    $magic!="**TI85**" && $magic!="**TI86**"} {
-	requires 0 0
-}
-
-main_guard {
-
-if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
+} elseif {$magic in {"**TI89**" "**TI92**" "**TI92P*"}} {
 	hex	2 "Thing"
 	ascii	8 "Folder name"
 	ascii	40 "Comment"
@@ -926,7 +904,7 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 	section "Variables" {
 		for_n $numFiles {
 			section Entry {
-				section "Header" {
+				section "Meta" {
 					sectionvalue "16 bytes"
 					set	wheredata [uint32 "Offset to data"]
 					set	name [ascii 8 Name]
@@ -949,23 +927,22 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 					sectionvalue [expr $Size+8]\ bytes
 					CheckSum $loopStart [pos]
 				}
-				sectionvalue "$name - [expr $Size+10] bytes"
+				sectionvalue "$name"
 				goto $retu
 			}
 		}
 	}
 	uint32	"File Size"
 	hex	2 "Body section magic"
-} else {
+} elseif {$magic in {"**TI73**" "**TI82**" "**TI83**" "**TI83F*" "**TI85**" "**TI86**"}} {
 	hex	2 "Thing"
 	entryd	"Owner Prod ID" [hex 1] 1 $ProdIDs
 
 	ascii	42 "Comment"
-	set	filesize [uint16 "Data size"]
+	set	filesize [size_field Variables]
 
 	section "Variables" {
 		whiless $filesize { # i.e. clibs "group"
-			sectionvalue $filesize\ bytes
 			section Entry {
 				set	name ""
 				set	typeName ""
@@ -975,17 +952,16 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 				set	datatype [hex 1]
 				move	-3
 				section "Meta" {
-					sectionvalue $bodyOffset\ bytes
 					if { $datatype == 0x13 && $magic!="**TI82**" || $datatype == 0x0F && $magic=="**TI82**" } {
 						# Backup
 						set	typeName "Backup"
-						uint16	"Data 1 size"
+						size_field "Data 1"
 						entry	"Type" "[hex 1] (Backup)" 1 [expr [pos]-1]
-						uint16	"Data 2 size"
-						uint16	"Data 3 size"
+						size_field "Data 2"
+						size_field "Data 3"
 						hex	2 "Address of data 2"
 					} else {
-						uint16	"Data size"
+						size_field
 
 						uint8
 						# larger 82 types are slightly offset, maybe make a returning function so the type value remains correct
@@ -1018,15 +994,14 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 
 				section "Body" {
 					if { $typeName == "Backup" } {
-						hex	[uint16 "Data 1 size"] "Data 1"
-						hex	[uint16 "Data 2 size"] "Data 2"
-						hex	[uint16 "Data 3 size"] "Data 3"
+						bytes	[size_field "Data 1"] "Data 1"
+						bytes	[size_field "Data 2"] "Data 2"
+						bytes	[size_field "Data 3"] "Data 3"
 					} elseif { $magic=="**TI85**" || $magic=="**TI86**" } {
-						set	datasize [uint16 "Data size"]
-						# hex	$datasize Data
+						set	datasize [size_field]
 						85readBody $datatype $datasize
 					} else {
-						set	datasize [uint16 "Data size"]
+						set	datasize [size_field]
 						Z80readBody $datatype $magic $datasize
 					}
 					# sectionvalue "[expr [pos]-$start] bytes"
@@ -1035,14 +1010,14 @@ if {$magic=="**TI89**" || $magic=="**TI92**" || $magic=="**TI92P*"} {
 				sectionname $typeName\ entry
 
 				if {$name == ""} {
-					sectionvalue "[expr [pos]-$headStart] bytes"
+					sectionvalue "[expr [pos]-$headStart+2] bytes"
 				} else {
-					sectionvalue "$name - [expr [pos]-$headStart] bytes"
+					sectionvalue "$name - [expr [pos]-$headStart+2] bytes"
 				}
 			}
 		}
 	}
 	CheckSum 55 [pos]
-}
-
+} else {
+	requires 0 0
 }

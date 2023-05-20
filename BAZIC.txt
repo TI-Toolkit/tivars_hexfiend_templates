@@ -3,7 +3,7 @@
 # (c) 2021-2023 LogicalJoe
 
 
-proc BAZIC_GetToken {line term iceT} {
+proc BAZIC_GetToken {term iceT} {
 set	BAZIC_00 [dict create \
 	0x01 ">DMS" \
 	0x02 ">Dec" \
@@ -248,7 +248,8 @@ set	BAZIC_00 [dict create \
 	0xFC "Histogram" \
 	0xFD "xyLine" \
 	0xFE "Scatter" \
-	0xFF "LinReg(ax+b) "]
+	0xFF "LinReg(ax+b) "
+]
 
 set	BAZIC_5C [dict create\
 	0x00 "\[A]" \
@@ -348,7 +349,7 @@ set	BAZIC_62_ice [dict create \
 set	BAZIC_62 [dict create \
 	0x01 "\[RegEQ]" \
 	0x02 "\[n]" \
-	0x03 "\[xbar]" \
+	0x03 "\[xhat]" \
 	0x04 "\[Sigmax]" \
 	0x05 "\[Sigmax^2]" \
 	0x06 "\[Sx]" \
@@ -357,7 +358,7 @@ set	BAZIC_62 [dict create \
 	0x09 "\[maxX]" \
 	0x0A "\[minY]" \
 	0x0B "\[maxY]" \
-	0x0C "\[ybar]" \
+	0x0C "\[yhat]" \
 	0x0D "\[Sigmay]" \
 	0x0E "\[Sigmay^2]" \
 	0x0F "\[Sy]" \
@@ -388,10 +389,10 @@ set	BAZIC_62 [dict create \
 	0x28 "\[phat]" \
 	0x29 "\[phat1]" \
 	0x2A "\[phat2]" \
-	0x2B "\[xbar1]" \
+	0x2B "\[xhat1]" \
 	0x2C "\[Sx1]" \
 	0x2D "\[n1]" \
-	0x2E "\[xbar2]" \
+	0x2E "\[xhat2]" \
 	0x2F "\[Sx2]" \
 	0X30 "\[n2]" \
 	0x31 "\[Sxp]" \
@@ -785,7 +786,7 @@ set	BAZIC_EF [dict create \
 	0x3A "\[Un/d]" \
 	0x3B "\[AUTO]" \
 	0x3C "\[DEC]" \
-	0x3D "\[FRAC]" \
+	0x3D "\[FRAC-APPROX]" \
 	0x3F "STATWIZARD ON" \
 	0x40 "STATWIZARD OFF" \
 	0x41 "BLUE" \
@@ -824,7 +825,7 @@ set	BAZIC_EF [dict create \
 	0x6A "DetectAsymOn" \
 	0x6B "DetectAsymOff" \
 	0x6C "BorderColor " \
-	0x73 "plotpixel" \
+	0x73 "plottinydot" \
 	0x74 "Thin" \
 	0x75 "Dot-Thin" \
 	0x79 "PlySmlt2" \
@@ -876,47 +877,20 @@ set	BAZIC_EF [dict create \
 	}
 
 	#set	term [hex 1]
-	if {$term == 0x5C} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_5C 5C]
-	} elseif {$term == 0x5D} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_5D 5D]
-	} elseif {$term == 0x5E} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_5E 5E]
-	} elseif {$term == 0x60} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_60 60]
-	} elseif {$term == 0x61} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_61 61]
+	if {$term in {0x5C 0x5D 0x5E 0x60 0x61 0x63 0x7E 0xAA 0xBB 0xEF}} {
+		set	token [BAZICdict [hex 1] [set "BAZIC_[format "%02X" $term]"] $term]
 	} elseif {$term == 0x62} {
+		# separate for ICE tokens
 		set	term2 [hex 1]
 		if {$iceT == 1 && [dict exists $BAZIC_62_ice $term2] } {
-			set	line $line[BAZICdict $term2 $BAZIC_62_ice 62]
+			set	token [BAZICdict $term2 $BAZIC_62_ice 62]
 		} else {
-			set	line $line[BAZICdict $term2 $BAZIC_62 62]
+			set	token [BAZICdict $term2 $BAZIC_62 62]
 		}
-	} elseif {$term == 0x63} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_63 63]
-	} elseif {$term == 0x7E} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_7E 7E]
-	} elseif {$term == 0xAA} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_AA AA]
-	} elseif {$term == 0xBB} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_BB BB]
-	} elseif {$term == 0xEF} {
-		set	term2 [hex 1]
-		set	line $line[BAZICdict $term2 $BAZIC_EF EF]
 	} else {
-		set	line $line[BAZICdict $term $BAZIC_00]
+		set	token [BAZICdict $term $BAZIC_00]
 	}
-	return $line
+	return $token
 }
 
 proc BAZIC {size} {
@@ -925,10 +899,6 @@ proc BAZIC {size} {
 		if {$size!=0} {
 			set	iceT [expr [uint8] == 44]
 			move	-1
-			sectionvalue	[hex $size]
-			goto	$start
-		} else {
-			sectionvalue	empty
 		}
 
 		set	e 0
@@ -939,9 +909,16 @@ proc BAZIC {size} {
 			set	Linestart [pos]
 			while {($term != 0x3F) && ([pos]-$start < $size)} {
 				set	term [hex 1]
-				set	line [BAZIC_GetToken $line $term $iceT]
+				set	line $line[BAZIC_GetToken $term $iceT]
 			}
 			entry	"Line $e" $line [expr [pos]-$Linestart] $Linestart
 		}
+		# if it was a single line, display it as the section value
+		if {$e == 1} {
+			sectionvalue $line
+		} elseif {$size != 0} {
+			sectionvalue "\[expand for code]"
+		}
 	}
+	goto [expr $start + $size]
 }
