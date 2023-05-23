@@ -230,6 +230,23 @@ set	68KtypeDict [dict create \
 	0x25 "Certificate" \
 ]
 
+proc read85Numb {{index ""}} {
+	proc internalNumber {index recursed} {
+		set	bitbyte [uint8]
+		set	Sign [expr $bitbyte & 128?"-":"+"]
+		set	Power [expr [uint16]-64512]
+		set	First [uint8]
+		set	First [expr $First/16].[expr $First%16]
+		set	Body $First[format "%012X" [hex 6]]
+		entry	"TI-Float $index" "$Sign$Body\e$Power" 10 [expr [pos]-10]
+
+		if {!$recursed && ($bitbyte & 1)} {
+			readTIFloat "$index\c" 1
+		}
+	}
+	internalNumber $index 0
+}
+
 proc readZ80Numb {{index ""}} {
 	proc readTIFloat {{index ""} {recursed 0}} {
 		set	bitbyte [uint8]
@@ -460,14 +477,43 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 	endsection
 }
 
-proc 85readBody {datatype {fallbacksize 0}} {
+proc 85readBody {datatype magic {fallbacksize 0}} {
 	section -collapsed Data
 	set	start [pos]
 
+# remaining formats:
+#	0x0D "Function GDB"
+#	0x0E "Polar GDB"
+#	0x0F "Parametric GDB"
+#	0x10 "Differential GDB"
+#	0x14 "LCD / PrintScreen" (how does one make this file?)
+
 	switch -- $datatype {
-		0x0C {
-			ascii	[size_field Data] Data
+		0x00 -
+		0x01 -
+		0x08 -
+		0x09 {
+			read85Numb
 		}
+		0x02 -
+		0x03 -
+		0x06 -
+		0x07 {
+			set	Width [expr [uint8 "Width"]]
+			set	Height [expr [uint8 "Height"]]
+			for {set a 0} {$a<$Width*$Height} {incr a} {
+				read85Numb "[expr 1+$a/$Width] [expr 1+$a%$Width]"
+			}
+		}
+		0x04 -
+		0x05 {
+			set	n [uint16 "Indices"]
+			for {set a 0} {$n > $a} {incr a} {
+				read85Numb [expr $a+1]
+			}
+		}
+		0x0A -
+		0x0C -
 		0x12 {
 			set	datasize [size_field Code]
 			set	posset [pos]
@@ -475,27 +521,91 @@ proc 85readBody {datatype {fallbacksize 0}} {
 			if {$datasize > 1} {
 				set	assembly [hex 2]
 				move	-2
+				set	firstbyte [uint8]
+				move	-1
 			}
 			if {$assembly == 0x8E27} {
 				section -collapsed Code {
-					hex	2 Literal\ Assembly
-					ascii	[expr $datasize-2] Code
+					hex	2 Tokenized\ Assembly
+					bytes	[expr $datasize-2] Code
 				}
 			} elseif {$assembly == 0x8E28} {
 				section -collapsed Code {
 					hex	2 Compiled\ Assembly
-					bytes	[expr $datasize-2] Code
+					bytes	[expr $datasize-2] Assembly
 				}
 			} elseif {$assembly == 0x8E29} {
 				hex	2 Edit-Lock
 				BAZIC85 [expr $datasize-2]
 			} elseif {$assembly == 0x0000} { # Untokenized
 				section -collapsed Code {
-					hex	2 Untokenized
-					ascii	[expr $datasize-2] Code
+					hex	1 Untokenized
+					hex	1 Locked
+					bytes	[expr $datasize-2] Code
+				}
+			} elseif {$firstbyte == 0} { # Untokenized and unlocked
+				section -collapsed Code {
+					hex	1 Untokenized
+					bytes	[expr $datasize-1] "Code"
 				}
 			} else {
 				BAZIC85	$datasize
+			}
+		}
+		0x11 {
+			bytes	[size_field] "Data"
+		}
+		0x17 -
+		0x18 -
+		0x19 -
+		0x1A -
+		0x1B {
+			size_field
+			switch -- $datatype {
+				0x17 { set values { xMin xMax xScl yMin yMax yScl } }
+				0x18 { set values { thetaMin thetaMax thetaStep xMin xMax xScl yMin yMax yScl } }
+				0x19 { set values { tMin tMax tStep xMin xMax xScl yMin yMax yScl } }
+				0x1A { set values { difTol tPlot tMin tMax tStep xMin xMax xScl yMin yMax yScl } }
+				0x1B { set values { \
+					zthetaMin zthetaMax zthetaStep \
+					ztPlot ztMin ztMax ztStep \
+					zxmin zxMax zxScl \
+					zyMin zyMax zyScl }
+				}
+			}
+
+			if {$datatype != 0x1B} {
+				hex	1 Reserved
+			}
+
+			foreach index $values {
+				read85Numb $index
+			}
+
+			if {$datatype in {0x17 0x1B}} {
+				bytes 20 Reserved
+				if {$magic == "**TI86**"} {
+					read85Numb xRes
+				}
+			}
+			# Dif windows have a bunch of extra stuffs attached, so that's fun
+			set Axis_bytes [dict create 0x00 t \
+			0x10 Q 0x11 Q1 0x12 Q2 0x13 Q3 0x14 Q4 0x15 Q5 0x16 Q6 0x17 Q7 0x18 Q8 0x19 Q9 \
+			0x20 Q' 0x21 Q'1 0x22 Q'2 0x23 Q'3 0x24 Q'4 0x25 Q'5 0x26 Q'6 0x27 Q'7 0x28 Q'8 0x29 Q'9]
+			if {$datatype == 0x1A} {
+				if {$magic == "**TI85**"} {
+					entryd	"X axis" [hex 1] 1 $Axis_bytes
+					entryd	"Y axis" [hex 1] 1 $Axis_bytes
+				} elseif {$magic == "**TI86**"} {
+					entryd	"FldOff x axis" [hex 1] 1 $Axis_bytes
+					entryd	"FldOff y axis" [hex 1] 1 $Axis_bytes
+					entryd	"SlpFld y axis" [hex 1] 1 $Axis_bytes
+					entryd	"DirFld x axis" [hex 1] 1 $Axis_bytes
+					entryd	"DirFld y axis" [hex 1] 1 $Axis_bytes
+					read85Numb dTime
+					read85Numb fldRes
+					read85Numb EStep
+				}
 			}
 		}
 		default {
@@ -952,14 +1062,17 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 				set	datatype [hex 1]
 				move	-3
 				section "Meta" {
-					if { $datatype == 0x13 && $magic!="**TI82**" || $datatype == 0x0F && $magic=="**TI82**" } {
+					if {
+					$datatype == 0x0F && $magic == "**TI82**" ||
+					$datatype == 0x1D && $magic in {"**TI85**" "**TI86**"} ||
+					$datatype == 0x13 && $magic in {"**TI73**" "**TI83**" "**TI83F*"}} {
 						# Backup
 						set	typeName "Backup"
 						size_field "Data 1"
 						entry	"Type" "[hex 1] (Backup)" 1 [expr [pos]-1]
 						size_field "Data 2"
 						size_field "Data 3"
-						hex	2 "Address of data 2"
+						uint16	-hex "Address of data 2"
 					} else {
 						size_field
 
@@ -971,7 +1084,12 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 						if {$magic=="**TI85**" || $magic=="**TI86**"} {
 							set	typeName [dictsearch $datatype $85typeDict]
 							entryd	"Type" $datatype 1 $85typeDict
-							set	name [string map {[ θ} [ascii [uint8 Name\ length] Name]]
+							set	namelen [uint8 Name\ length]
+							if {$namelen} {
+								set	Name [string map {[ θ} [ascii $namelen Name]]
+							} else {
+								entry	Name ""
+							}
 						} else {
 							set	typeName [dictsearch $datatype $Z80typeDict]
 							entryd	"Type" $datatype 1 $Z80typeDict
@@ -999,7 +1117,7 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 						bytes	[size_field "Data 3"] "Data 3"
 					} elseif { $magic=="**TI85**" || $magic=="**TI86**" } {
 						set	datasize [size_field]
-						85readBody $datatype $datasize
+						85readBody $datatype $magic $datasize
 					} else {
 						set	datasize [size_field]
 						Z80readBody $datatype $magic $datasize
