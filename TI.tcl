@@ -53,18 +53,12 @@ if {[file exists [file join $ThisDirectory "BAZIC85.txt"]]} {
 } else {
 	proc BAZIC85 {datasize} {
 		if {$datasize} {
-			hex	$datasize "Data"
+			bytes	$datasize Code
 		} else {
-			entry	"Data" "empty"
+			entry	"Code" ""
 		}
 	}
 }
-
-# proc main_guard {body} {
-#	if [catch { uplevel 1 $body }] {
-#		uplevel	1 { entry "FATAL" "Somthin' hap'ned" }
-#	}
-# }
 
 # entryd label value length dict
 # TODO: offset?
@@ -233,6 +227,14 @@ set	68KtypeDict [dict create \
 proc read85Numb {{index ""}} {
 	proc internalNumber {index recursed} {
 		set	bitbyte [uint8]
+		if {$bitbyte == 255} {
+			# seems like this means it is undefined, might be exclusive to Diff GDB, it is unclear.
+			set start [pos]
+			set string [ascii [uint8]]
+			goto [expr $start+9]
+			entry	"TI-Float $index" $string\ (undefined) 10 [expr [pos]-10]
+			return
+		}
 		set	Sign [expr $bitbyte & 128?"-":"+"]
 		set	Power [expr [uint16]-64512]
 		set	First [uint8]
@@ -241,7 +243,7 @@ proc read85Numb {{index ""}} {
 		entry	"TI-Float $index" "$Sign$Body\e$Power" 10 [expr [pos]-10]
 
 		if {!$recursed && ($bitbyte & 1)} {
-			readTIFloat "$index\c" 1
+			internalNumber "$index\c" 1
 		}
 	}
 	internalNumber $index 0
@@ -385,11 +387,7 @@ proc readGDB {{magic "**TI83F*"}} {
 			# see https://wikiti.brandonw.net/index.php?title=83Plus:OS:System_Table#Entry_Parts
 			section -collapsed "Flags" {
 				set	Flags [hex 1]
-				if {($Flags & (1 << 5)) != 0} {
-					sectionvalue "$Flags - Selected"
-				} else {
-					sectionvalue "$Flags - Unselected"
-				}
+				sectionvalue "$Flags - [expr ($Flags & (1 << 5))?"Selected":"Unselected"]"
 				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $Z80typeDict
 				FlagRead $Flags 5 Selected Unselected
 				FlagRead $Flags 6 "Was used for graph"
@@ -426,6 +424,180 @@ proc readGDB {{magic "**TI83F*"}} {
 				FlagRead $Flags $a Unused
 			}
 		}
+	}
+}
+
+proc read85GDB {type {magic "**TI86**"}} {
+	size_field
+	section "Format flags" {
+		set	Flags [hex 1]
+		sectionvalue $Flags
+		FlagRead $Flags 0 DrawDot DrawLine
+		FlagRead $Flags 1 SimulG SeqG
+		FlagRead $Flags 2 GridOn GridOff
+		FlagRead $Flags 3 PolarGC RectGC
+		FlagRead $Flags 4 CoordsOff CoordsOn
+		FlagRead $Flags 5 AxesOff AxesOn
+		FlagRead $Flags 6 LabelOn LabelOff
+		FlagRead $Flags 7 86GDB 85GDB
+		set GDB86 [expr $Flags >> 7]
+	}
+	set StyleCount 100
+	switch -- $type {
+		0x0D { # function mode
+			section Numbers {
+				foreach index {xMin xMax xScl yMin yMax yScl} {
+					read85Numb $index
+				}
+				if {$GDB86} {
+					read85Numb xRes
+				}
+			}
+			set functions [uint8 "Equation count"]
+			section Equations
+			for_n $functions {
+				section Equation {
+					section -collapsed Flags {
+						set	Flags [hex 1]
+						set	equid [expr $Flags & 127]
+						entry	ID $equid 1 [expr [pos]-1]
+						sectionvalue "y$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
+						FlagRead $Flags 7 Selected Unselected
+					}
+					sectionname y$equid
+					BAZIC85	[size_field Code]
+				}
+			}
+			endsection
+			set StyleFunc "y"
+		}
+		0x0E { # polar mode
+			section Numbers {
+				foreach index {thetaMin thetaMax thetaStep xMin xMax xScl yMin yMax yScl} {
+					read85Numb $index
+				}
+			}
+			set functions [uint8 "Equation count"]
+			section Equations
+			for_n $functions {
+				section Equation {
+					section -collapsed Flags {
+						set	Flags [hex 1]
+						set	equid [expr $Flags & 127]
+						entry	ID $equid 1 [expr [pos]-1]
+						sectionvalue "r$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
+						FlagRead $Flags 7 Selected Unselected
+					}
+					sectionname r$equid
+					BAZIC85	[size_field Code]
+				}
+			}
+			endsection
+			set StyleCount 100
+			set StyleFunc "r"
+		}
+		0x0F { # parametric mode
+			section Numbers {
+				foreach index {tMin tMax tStep xMin xMax xScl yMin yMax yScl} {
+					read85Numb $index
+				}
+			}
+			set functions [uint8 "Equation count"]
+			section Equations
+			for_n $functions {
+				section Equation {
+					section -collapsed Flags {
+						set	Flags [hex 1]
+						set	equid [expr $Flags & 127]
+						entry	ID \[xy]t$equid 1 [expr [pos]-1]
+						sectionvalue "\[xy]t$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
+						FlagRead $Flags 7 Selected Unselected
+					}
+					sectionname \[xy]t$equid
+					section xt$equid {
+						BAZIC85	[size_field Code]
+					}
+					section yt$equid {
+						BAZIC85	[size_field Code]
+					}
+				}
+			}
+			endsection
+			set StyleFunc "\[xy]t"
+		}
+		0x10 { # differential mode
+			if {$GDB86} {
+				section "Differential flags" {
+					set	Flags [hex 1]
+					sectionvalue $Flags
+					entryd	Bits\ 0-2 [expr $Flags & 7] 1 [dict create 1 SlpFld 2 DirFld 4 FldOff]
+					FlagRead $Flags 3 Unknown
+					FlagRead $Flags 4 Unknown
+					FlagRead $Flags 5 Euler RK
+					FlagRead $Flags 6 Unknown
+					FlagRead $Flags 7 Unknown
+				}
+			}
+			section Numbers {
+				foreach index {difTol tPlot tMin tMax tStep xMin xMax xScl yMin yMax yScl} {
+					read85Numb $index
+				}
+			}
+			set Axis_bytes [dict create 0x00 t \
+			0x10 Q 0x11 Q1 0x12 Q2 0x13 Q3 0x14 Q4 0x15 Q5 0x16 Q6 0x17 Q7 0x18 Q8 0x19 Q9 \
+			0x20 Q' 0x21 Q'1 0x22 Q'2 0x23 Q'3 0x24 Q'4 0x25 Q'5 0x26 Q'6 0x27 Q'7 0x28 Q'8 0x29 Q'9]
+			if {$GDB86} {
+				entryd	"FldOff x axis" [hex 1] 1 $Axis_bytes
+				entryd	"FldOff y axis" [hex 1] 1 $Axis_bytes
+				entryd	"SlpFld y axis" [hex 1] 1 $Axis_bytes
+				entryd	"DirFld x axis" [hex 1] 1 $Axis_bytes
+				entryd	"DirFld y axis" [hex 1] 1 $Axis_bytes
+				read85Numb dTime
+				read85Numb fldRes
+				read85Numb EStep
+			} else {
+				entryd	"X axis" [hex 1] 1 $Axis_bytes
+				entryd	"Y axis" [hex 1] 1 $Axis_bytes
+			}
+
+			set functions [uint8 "Equation count"]
+			section Equations
+			for_n $functions {
+				section Equation {
+					section -collapsed Flags {
+						set	Flags [hex 1]
+						set	equid [expr $Flags & 127]
+						entry	ID $equid 1 [expr [pos]-1]
+						sectionvalue "Q'$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
+						FlagRead $Flags 7 Selected Unselected
+					}
+					sectionname Q'$equid
+					BAZIC85	[size_field Code]
+					if {$GDB86} {
+						hex	1 Unknown
+					}
+					read85Numb Initial
+				}
+			}
+			endsection
+			set StyleCount 10
+			set StyleFunc "Q'"
+		}
+	}
+	if {$GDB86} {
+		section Styles
+		if {$GDB86} {
+			for {set a 1} {$a < $StyleCount} {incr a} {
+				if {$a%2} {
+					set b [uint8]
+				} else {
+					set b [expr $b << 4]
+				}
+				entryd	$StyleFunc$a\ Style [expr $b>>4&15] 1 \
+				[dict create 0 Solid\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 dotted\ line]
+			}
+		}
+		endsection
 	}
 }
 
@@ -480,13 +652,6 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 proc 85readBody {datatype magic {fallbacksize 0}} {
 	section -collapsed Data
 	set	start [pos]
-
-# remaining formats:
-#	0x0D "Function GDB"
-#	0x0E "Polar GDB"
-#	0x0F "Parametric GDB"
-#	0x10 "Differential GDB"
-#	0x14 "LCD / PrintScreen" (how does one make this file?)
 
 	switch -- $datatype {
 		0x00 -
@@ -552,6 +717,13 @@ proc 85readBody {datatype magic {fallbacksize 0}} {
 				BAZIC85	$datasize
 			}
 		}
+		0x0D -
+		0x0E -
+		0x0F -
+		0x10 {
+			read85GDB $datatype $magic
+			goto	[expr $start + $fallbacksize]
+		}
 		0x11 {
 			bytes	[size_field] "Data"
 		}
@@ -582,11 +754,11 @@ proc 85readBody {datatype magic {fallbacksize 0}} {
 				read85Numb $index
 			}
 
-			if {$datatype in {0x17 0x1B}} {
+			if {$datatype in 0x17} {
 				bytes 20 Reserved
-				if {$magic == "**TI86**"} {
-					read85Numb xRes
-				}
+			}
+			if {$datatype in {0x17 0x1B} && $magic == "**TI86**"} {
+				read85Numb xRes
 			}
 			# Dif windows have a bunch of extra stuffs attached, so that's fun
 			set Axis_bytes [dict create 0x00 t \
@@ -1066,7 +1238,6 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 					$datatype == 0x0F && $magic == "**TI82**" ||
 					$datatype == 0x1D && $magic in {"**TI85**" "**TI86**"} ||
 					$datatype == 0x13 && $magic in {"**TI73**" "**TI83**" "**TI83F*"}} {
-						# Backup
 						set	typeName "Backup"
 						size_field "Data 1"
 						entry	"Type" "[hex 1] (Backup)" 1 [expr [pos]-1]
