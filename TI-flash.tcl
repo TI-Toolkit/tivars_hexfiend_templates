@@ -275,7 +275,7 @@ section	"Data" {
 	}
 }
 
-if {[len]-[pos]} {
-	ascii	[expr [len]-[pos]] "Extra Data"
+if {![end]} {
+	bytes	eof "Extra Data"
 }
 }] {}

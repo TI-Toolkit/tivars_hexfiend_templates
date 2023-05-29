@@ -2,6 +2,12 @@
 # Version 1.0
 # (c) 2021-2023 LogicalJoe
 
+if {[info command hf_min_version_required] ne ""} {
+	hf_min_version_required 2.15
+} else {
+	puts stderr "Template must be used in HexFiend"
+	return
+}
 
 proc size_field {{title Data}} {
 	set	s [uint16]
@@ -9,16 +15,18 @@ proc size_field {{title Data}} {
 	return	$s
 }
 
-variable ThisDirectory [file dirname [file normalize [info script]]]
+set ThisDirectory [file dirname [file normalize [info script]]]
 
-if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
-	source	[file join $ThisDirectory BAZIC.txt]
-} else {
-	proc BAZIC {datasize} {
-		if {$datasize} {
-			bytes	$datasize Code
-		} else {
-			entry	"Code" ""
+foreach a {BAZIC BAZIC85} {
+	if {[file exists [file join $ThisDirectory $a.txt]]} {
+		source	[file join $ThisDirectory $a.txt]
+	} else {
+		proc $a {size {a a}} {
+			if {$size} {
+				bytes	$size Code
+			} else {
+				entry	Code ""
+			}
 		}
 	}
 }
@@ -29,9 +37,9 @@ if {[file exists [file join $ThisDirectory AppVar.txt]]} {
 	proc ReadAppVar {} {
 		set	datasize [size_field]
 		if {$datasize} {
-			bytes	$datasize "Data"
+			bytes	$datasize Data
 		} else {
-			entry	"Data" ""
+			entry	Data ""
 		}
 	}
 }
@@ -41,21 +49,9 @@ if {[file exists [file join $ThisDirectory "68KRPN.txt"]]} {
 } else {
 	proc 68KRPN {datasize} {
 		if {$datasize} {
-			hex	$datasize "Data"
+			bytes	$datasize Data
 		} else {
-			entry	"Data" "empty"
-		}
-	}
-}
-
-if {[file exists [file join $ThisDirectory "BAZIC85.txt"]]} {
-	source	[file join $ThisDirectory "BAZIC85.txt"]
-} else {
-	proc BAZIC85 {datasize} {
-		if {$datasize} {
-			bytes	$datasize Code
-		} else {
-			entry	"Code" ""
+			entry	Data ""
 		}
 	}
 }
@@ -64,30 +60,20 @@ if {[file exists [file join $ThisDirectory "BAZIC85.txt"]]} {
 # TODO: offset?
 proc entryd {a b c d} {
 	if [dict exists $d $b] {
-		set	e "$b ([dict get $d $b])"
+		set	e [dict get $d $b]
 	} else {
 		set	e $b
 	}
 	if {$c} {
-		entry	$a $e $c [expr [pos]-$c]
+		entry	$a $b\ ($e) $c [expr [pos]-$c]
 	} else {
 		entry	$a $e
 	}
 	return	$e
 }
 
-# dictsearch value dict
-proc dictsearch {b d} {
-	if [dict exists $d $b] {
-		set	e [dict get $d $b]
-	} else {
-		set	e $b
-	}
-	return	$e
-}
-
 proc FlagRead {Flag bit {name Unused/Unknown} {notname -1}} {
-	if {($Flag & (1 << $bit)) != 0} {
+	if {$Flag & (1 << $bit)} {
 		if {$name != -1} {
 			entry Bit\ $bit $name 1 [expr [pos] - 1]
 		}
@@ -228,7 +214,7 @@ proc read85Numb {{index ""}} {
 	proc internalNumber {index recursed} {
 		set	bitbyte [uint8]
 		if {$bitbyte == 255} {
-			# seems like this means it is undefined, might be exclusive to Diff GDB, it is unclear.
+			# seems to mean undefined, might be exclusive to Diff GDB, it is unclear.
 			set start [pos]
 			set string [ascii [uint8]]
 			goto [expr $start+9]
@@ -252,15 +238,13 @@ proc read85Numb {{index ""}} {
 proc readZ80Numb {{index ""}} {
 	proc readTIFloat {{index ""} {recursed 0}} {
 		set	bitbyte [uint8]
-		set	typebyte [expr ($bitbyte & 127) > 15 ?($bitbyte & 127):($bitbyte & 2)?0:($bitbyte & 12)]
-
-		if {$typebyte == 28 || $typebyte == 29} {
+		set	typebyte [expr ($bitbyte & 63) < 16 && ($bitbyte & 2) ?0:($bitbyte & 63)]
+		if {$typebyte in {28 29}} {
 			move	-1
 			readTIRadical $index $recursed
 			return
 		}
-
-		set	Name [expr $typebyte > 15 ?"raction":"loat"]
+		set	Name TI-F[expr $typebyte > 15 ?"raction":"loat"]
 		set	Name $Name[expr $typebyte>29?"Pi":""]
 		set	Bits [expr ($bitbyte&2 && !(48&$bitbyte))?" unset":""]
 		set	Sign [expr $bitbyte & 128?"-":"+"]
@@ -268,19 +252,16 @@ proc readZ80Numb {{index ""}} {
 		set	First [uint8]
 		set	First [expr $First/16].[expr $First%16]
 		set	Body $First[format "%012X" [hex 6]]
-		entry	"TI-F$Name $index" "$Sign$Body\e$Power$Bits" 9 [expr [pos]-9]
+		entry	"$Name $index" "$Sign$Body\e$Power$Bits" 9 [expr [pos]-9]
 
-		if {!$recursed && (($bitbyte & 0x0E)==0x0C ||
-		$typebyte == 27 || $typebyte == 30 || $typebyte == 31)} {
+		if {!$recursed && $typebyte in {12 27 30 31}} {
 			readTIFloat "$index\c" 1
 		}
 	}
 
 	proc readTIRadical {{index ""} {recursed 0}} {
 		set	typebyte [uint8]
-		big_endian
 		set	Body [format "%016X" [hex 8]]
-		little_endian
 
 		set	Signs [string range $Body 0 0]
 		set	Sign1 [expr $Signs & 1?"-":""]
@@ -292,9 +273,8 @@ proc readZ80Numb {{index ""}} {
 		set	N2 [string range $Body 13 15]
 		entry	"TI-Radical $index" "($N1√$N2$N3√$N4)/$N5" 9 [expr [pos]-9]
 
-		if {!$recursed && ($typebyte in {27 29 30 33})} {
+		if {!$recursed && $typebyte == 29} {
 			readTIRadical "$index\c" 1
-			# should this be readTIFloat?
 		}
 	}
 
@@ -302,12 +282,14 @@ proc readZ80Numb {{index ""}} {
 }
 
 proc readGDB {{magic "**TI83F*"}} {
-	global	Z80typeDict
 	set	datasize [size_field]
 	set	start [pos]
-	uint8	Reserved ;# always zero
-	set	GraphMode [uint8]
-	entryd	"Graph mode flag" $GraphMode 1 [dict create 16 Function 32 Polar 64 Parametric 128 Sequence]
+	set	isn82 {$magic != "**TI82**"}
+	if $isn82 {
+		uint8	Reserved ;# always zero
+	}
+	set	Mode [uint8]
+	entryd	"Graph mode flag" $Mode 1 [dict create 16 Function 32 Polar 64 Parametric 128 Sequence]
 	section "Format flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
@@ -328,34 +310,36 @@ proc readGDB {{magic "**TI83F*"}} {
 		FlagRead $Flags 6 Unused
 		FlagRead $Flags 7 Unused
 	}
-	section "Extended settings" {
-		set	Flags [hex 1]
-		sectionvalue $Flags
-		FlagRead $Flags 0 ExprOff ExprOn
-		set	seqmode [expr ($Flags & 6) >> 1]
-		if {$seqmode} {
-			entry Bits\ 1&2 "SEQ(n+$seqmode)" 1 [expr [pos] - 1]
-		} else {
-			entry Bits\ 1&2 "SEQ(n)" 1 [expr [pos] - 1]
-		}
-		foreach a {3 4 5 6 7} {
-			FlagRead $Flags $a Unused
+	if $isn82 {
+		section "Extended settings" {
+			set	Flags [hex 1]
+			sectionvalue $Flags
+			FlagRead $Flags 0 ExprOff ExprOn
+			set	seqmode [expr ($Flags & 6) >> 1]
+			entry	Bits\ 1&2 "SEQ([expr $seqmode?"n+$seqmode":"n"])" 1 [expr [pos] - 1]
+			foreach a {3 4 5 6 7} {
+				FlagRead $Flags $a Unused
+			}
 		}
 	}
 
-	if {$magic == "**TI82**"} {
-		switch -- $GraphMode {
-			16	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl } }
-			32	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Thetamin Thetamax Thetastep } }
-			64	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Tmin Tmax Tstep } }
-			128	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl nMin nMax UnStart VnStart nStart } }
+	set	values { Xmin Xmax Xscl Ymin Ymax Yscl }
+	switch -- $Mode {
+		16	{
+			set	EquNames { Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0 }
+			if $isn82 { append values Xres }
 		}
-	} else {
-		switch -- $GraphMode {
-			16	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Xres } }
-			32	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Thetamin Thetamax Thetastep } }
-			64	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl Tmin Tmax Tstep } }
-			128	{ set	values { Xmin Xmax Xscl Ymin Ymax Yscl PlotStart nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) PlotStep w(nMin) } }
+		32	{
+			set	EquNames { r1 r2 r3 r4 r5 r6 }
+			lappend values Thetamin Thetamax Thetastep
+		}
+		64	{
+			set	EquNames { X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T }
+			lappend values Tmin Tmax Tstep
+		}
+		128	{
+			set	EquNames [expr $isn82?{ u v w }:{ u v }]
+			append values [expr $isn82?{PlotStart nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) PlotStep w(nMin)}:{nMin nMax UnStart VnStart nStart}]
 		}
 	}
 	section "Numbers" {
@@ -363,32 +347,22 @@ proc readGDB {{magic "**TI83F*"}} {
 			readZ80Numb $index
 		}
 	}
-
-	switch -- $GraphMode {
-		16	{ set	equationSets { Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0 } }
-		32	{ set	equationSets { r1 r2 r3 r4 r5 r6 } }
-		64	{ set	equationSets { X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T } }
-		128	{ set	equationSets [expr {"$magic" == "**TI82**"} ?{ u v }:{ u v w }] }
-	}
-	section "Styles" {
-		foreach index $equationSets {
-			entryd	"$index Style" [uint8] 1 [dict create 0 Thin\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 Thick\ dotted\ line 7 Thin\ dotted\ line]
+	
+	if $isn82 {
+		section "Styles" {
+			foreach index $EquNames {
+				entryd	"$index Style" [uint8] 1 [dict create 0 Thin\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 Thick\ dotted\ line 7 Thin\ dotted\ line]
+			}
 		}
-	}
-	if {$GraphMode == 64} {
-		set	equationsAll { X1T Y1T X2T Y2T X3T Y3T X4T Y4T X5T Y5T X6T Y6T }
-	} else {
-		set	equationsAll $equationSets
 	}
 
 	section Equations
-	foreach index $equationsAll {
+	foreach index [join [split $EquNames /]\ ] {
 		section $index {
-			# see https://wikiti.brandonw.net/index.php?title=83Plus:OS:System_Table#Entry_Parts
 			section -collapsed "Flags" {
 				set	Flags [hex 1]
-				sectionvalue "$Flags - [expr ($Flags & (1 << 5))?"Selected":"Unselected"]"
-				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $Z80typeDict
+				sectionvalue "$Flags - [expr $Flags & 32?"Selected":"Unselected"]"
+				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $::Z80typeDict
 				FlagRead $Flags 5 Selected Unselected
 				FlagRead $Flags 6 "Was used for graph"
 				FlagRead $Flags 7 "Link transfer flag"
@@ -407,7 +381,7 @@ proc readGDB {{magic "**TI83F*"}} {
 			9 LTBLUE 10 YELLOW 11 WHITE 12 LTGRAY \
 			13 MEDGRAY 14 GRAY 15 DARKGRAY 16 Off]
 
-			foreach index $equationSets {
+			foreach index $EquNames {
 				entryd	"$index color" [uint8] 1 $oscolors
 			}
 			entryd	"Grid color" [uint8] 1 $oscolors
@@ -442,90 +416,24 @@ proc read85GDB {type {magic "**TI86**"}} {
 		FlagRead $Flags 7 86GDB 85GDB
 		set GDB86 [expr $Flags >> 7]
 	}
-	set StyleCount 100
+	set	StyleCount 100
 	switch -- $type {
-		0x0D { # function mode
-			section Numbers {
-				foreach index {xMin xMax xScl yMin yMax yScl} {
-					read85Numb $index
-				}
-				if {$GDB86} {
-					read85Numb xRes
-				}
-			}
-			set functions [uint8 "Equation count"]
-			section Equations
-			for_n $functions {
-				section Equation {
-					section -collapsed Flags {
-						set	Flags [hex 1]
-						set	equid [expr $Flags & 127]
-						entry	ID $equid 1 [expr [pos]-1]
-						sectionvalue "y$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
-						FlagRead $Flags 7 Selected Unselected
-					}
-					sectionname y$equid
-					BAZIC85	[size_field Code]
-				}
-			}
-			endsection
-			set StyleFunc "y"
+		0x0D {
+			set	EquName y
+			set	Numbers {xMin xMax xScl yMin yMax yScl}
+			if {$GDB86} { append Numbers xRes }
 		}
-		0x0E { # polar mode
-			section Numbers {
-				foreach index {thetaMin thetaMax thetaStep xMin xMax xScl yMin yMax yScl} {
-					read85Numb $index
-				}
-			}
-			set functions [uint8 "Equation count"]
-			section Equations
-			for_n $functions {
-				section Equation {
-					section -collapsed Flags {
-						set	Flags [hex 1]
-						set	equid [expr $Flags & 127]
-						entry	ID $equid 1 [expr [pos]-1]
-						sectionvalue "r$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
-						FlagRead $Flags 7 Selected Unselected
-					}
-					sectionname r$equid
-					BAZIC85	[size_field Code]
-				}
-			}
-			endsection
-			set StyleCount 100
-			set StyleFunc "r"
+		0x0E {
+			set	EquName r
+			set	Numbers {thetaMin thetaMax thetaStep xMin xMax xScl yMin yMax yScl}
 		}
-		0x0F { # parametric mode
-			section Numbers {
-				foreach index {tMin tMax tStep xMin xMax xScl yMin yMax yScl} {
-					read85Numb $index
-				}
-			}
-			set functions [uint8 "Equation count"]
-			section Equations
-			for_n $functions {
-				section Equation {
-					section -collapsed Flags {
-						set	Flags [hex 1]
-						set	equid [expr $Flags & 127]
-						entry	ID \[xy]t$equid 1 [expr [pos]-1]
-						sectionvalue "\[xy]t$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
-						FlagRead $Flags 7 Selected Unselected
-					}
-					sectionname \[xy]t$equid
-					section xt$equid {
-						BAZIC85	[size_field Code]
-					}
-					section yt$equid {
-						BAZIC85	[size_field Code]
-					}
-				}
-			}
-			endsection
-			set StyleFunc "\[xy]t"
+		0x0F {
+			set	EquName \[xy]t
+			set	Numbers {tMin tMax tStep xMin xMax xScl yMin yMax yScl}
 		}
-		0x10 { # differential mode
+		0x10 {
+			set	EquName Q'
+			set	StyleCount 10
 			if {$GDB86} {
 				section "Differential flags" {
 					set	Flags [hex 1]
@@ -538,66 +446,82 @@ proc read85GDB {type {magic "**TI86**"}} {
 					FlagRead $Flags 7 Unknown
 				}
 			}
-			section Numbers {
-				foreach index {difTol tPlot tMin tMax tStep xMin xMax xScl yMin yMax yScl} {
-					read85Numb $index
-				}
-			}
-			set Axis_bytes [dict create 0x00 t \
-			0x10 Q 0x11 Q1 0x12 Q2 0x13 Q3 0x14 Q4 0x15 Q5 0x16 Q6 0x17 Q7 0x18 Q8 0x19 Q9 \
-			0x20 Q' 0x21 Q'1 0x22 Q'2 0x23 Q'3 0x24 Q'4 0x25 Q'5 0x26 Q'6 0x27 Q'7 0x28 Q'8 0x29 Q'9]
-			if {$GDB86} {
-				entryd	"FldOff x axis" [hex 1] 1 $Axis_bytes
-				entryd	"FldOff y axis" [hex 1] 1 $Axis_bytes
-				entryd	"SlpFld y axis" [hex 1] 1 $Axis_bytes
-				entryd	"DirFld x axis" [hex 1] 1 $Axis_bytes
-				entryd	"DirFld y axis" [hex 1] 1 $Axis_bytes
-				read85Numb dTime
-				read85Numb fldRes
-				read85Numb EStep
-			} else {
-				entryd	"X axis" [hex 1] 1 $Axis_bytes
-				entryd	"Y axis" [hex 1] 1 $Axis_bytes
-			}
-
-			set functions [uint8 "Equation count"]
-			section Equations
-			for_n $functions {
-				section Equation {
-					section -collapsed Flags {
-						set	Flags [hex 1]
-						set	equid [expr $Flags & 127]
-						entry	ID $equid 1 [expr [pos]-1]
-						sectionvalue "Q'$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
-						FlagRead $Flags 7 Selected Unselected
-					}
-					sectionname Q'$equid
-					BAZIC85	[size_field Code]
-					if {$GDB86} {
-						hex	1 Unknown
-					}
-					read85Numb Initial
-				}
-			}
-			endsection
-			set StyleCount 10
-			set StyleFunc "Q'"
+			set	Numbers {difTol tPlot tMin tMax tStep xMin xMax xScl yMin yMax yScl}
 		}
 	}
-	if {$GDB86} {
-		section Styles
+
+	section Numbers {
+		foreach index $Numbers {
+			read85Numb $index
+		}
+	}
+
+	if {$type == 0x10} {
+		section Differential
+		set	Axis_dict [dict create 0x00 t 0x10 Q 0x20 Q']
+		for {set a 1} {$a<10} {incr a} {
+			dict	set Axis_dict 0x1$a Q$a
+			dict	set Axis_dict 0x2$a Q'$a
+		}
+		entryd	"FldOff x axis" [hex 1] 1 $Axis_dict
+		entryd	"FldOff y axis" [hex 1] 1 $Axis_dict
 		if {$GDB86} {
-			for {set a 1} {$a < $StyleCount} {incr a} {
-				if {$a%2} {
-					set b [uint8]
-				} else {
-					set b [expr $b << 4]
-				}
-				entryd	$StyleFunc$a\ Style [expr $b>>4&15] 1 \
-				[dict create 0 Solid\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 dotted\ line]
+			entryd	"SlpFld y axis" [hex 1] 1 $Axis_dict
+			entryd	"DirFld x axis" [hex 1] 1 $Axis_dict
+			entryd	"DirFld y axis" [hex 1] 1 $Axis_dict
+			foreach a {dTime fldRes EStep} {
+				read85Numb $a
 			}
 		}
 		endsection
+	}
+
+	set	functions [uint8 "Equation count"]
+	section Equations
+	for_n $functions {
+		section Equation
+		section -collapsed Flags {
+			set	Flags [hex 1]
+			set	equid [expr $Flags & 127]
+			entry	ID $equid 1 [expr [pos]-1]
+			sectionvalue "$EquName$equid - [expr $Flags & 0x80?"Selected":"Unselected"]"
+			FlagRead $Flags 7 Selected Unselected
+		}
+		sectionname $EquName$equid
+		switch -- $type {
+			0x0F { # parametric
+				foreach a {x y} {
+					section ${a}t$equid {
+						BAZIC85	[size_field Code] $magic
+					}
+				}
+			}
+			0x10 { # differential
+				BAZIC85	[size_field Code] $magic
+				if {$GDB86} {
+					hex	1 Unknown
+				}
+				read85Numb Initial
+			}
+			default { # function & polar
+				BAZIC85	[size_field Code] $magic
+			}
+		}
+		endsection
+	}
+	endsection
+	if {$GDB86} {
+		section Styles {
+			for {set a 1} {$a < $StyleCount} {incr a} {
+				if {$a%2} {
+					set	b [uint8]
+				} else {
+					set	b [expr $b << 4]
+				}
+				entryd	$EquName$a\ Style [expr $b>>4&15] 1 \
+				[dict create 0 Solid\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 dotted\ line]
+			}
+		}
 	}
 }
 
@@ -610,8 +534,7 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 		0x06 -
 		0x0C -
 		0x12 -
-		0x13 {
-			# RPN-TAG formats
+		0x13 { # RPN-TAG formats
 			# bytes	$fallbacksize Data
 			68KRPN	$fallbacksize
 		}
@@ -642,9 +565,7 @@ proc 68KreadBody {datatype {fallbacksize 0}} {
 			}
 			hex	1 "TEXT_TAG (E0)"
 		}
-		default {
-			bytes	$fallbacksize Data
-		}
+		default { bytes $fallbacksize Data }
 	}
 	endsection
 }
@@ -657,9 +578,7 @@ proc 85readBody {datatype magic {fallbacksize 0}} {
 		0x00 -
 		0x01 -
 		0x08 -
-		0x09 {
-			read85Numb
-		}
+		0x09 { read85Numb }
 		0x02 -
 		0x03 -
 		0x06 -
@@ -682,10 +601,13 @@ proc 85readBody {datatype magic {fallbacksize 0}} {
 		0x12 {
 			set	datasize [size_field Code]
 			set	posset [pos]
-			set	assembly 0
+			set	assembly 1
+			set	firstbyte 1
 			if {$datasize > 1} {
 				set	assembly [hex 2]
 				move	-2
+			}
+			if {$datasize} {
 				set	firstbyte [uint8]
 				move	-1
 			}
@@ -701,7 +623,7 @@ proc 85readBody {datatype magic {fallbacksize 0}} {
 				}
 			} elseif {$assembly == 0x8E29} {
 				hex	2 Edit-Lock
-				BAZIC85 [expr $datasize-2]
+				BAZIC85 [expr $datasize-2] $magic
 			} elseif {$assembly == 0x0000} { # Untokenized
 				section -collapsed Code {
 					hex	1 Untokenized
@@ -714,19 +636,14 @@ proc 85readBody {datatype magic {fallbacksize 0}} {
 					bytes	[expr $datasize-1] "Code"
 				}
 			} else {
-				BAZIC85	$datasize
+				BAZIC85	$datasize $magic
 			}
 		}
 		0x0D -
 		0x0E -
 		0x0F -
-		0x10 {
-			read85GDB $datatype $magic
-			goto	[expr $start + $fallbacksize]
-		}
-		0x11 {
-			bytes	[size_field] "Data"
-		}
+		0x10 { read85GDB $datatype $magic }
+		0x11 { bytes [size_field] "Data" }
 		0x17 -
 		0x18 -
 		0x19 -
@@ -738,12 +655,7 @@ proc 85readBody {datatype magic {fallbacksize 0}} {
 				0x18 { set values { thetaMin thetaMax thetaStep xMin xMax xScl yMin yMax yScl } }
 				0x19 { set values { tMin tMax tStep xMin xMax xScl yMin yMax yScl } }
 				0x1A { set values { difTol tPlot tMin tMax tStep xMin xMax xScl yMin yMax yScl } }
-				0x1B { set values { \
-					zthetaMin zthetaMax zthetaStep \
-					ztPlot ztMin ztMax ztStep \
-					zxmin zxMax zxScl \
-					zyMin zyMax zyScl }
-				}
+				0x1B { set values { zthetaMin zthetaMax zthetaStep ztPlot ztMin ztMax ztStep zxmin zxMax zxScl zyMin zyMax zyScl } }
 			}
 
 			if {$datatype != 0x1B} {
@@ -761,32 +673,28 @@ proc 85readBody {datatype magic {fallbacksize 0}} {
 				read85Numb xRes
 			}
 			# Dif windows have a bunch of extra stuffs attached, so that's fun
-			set Axis_bytes [dict create 0x00 t \
-			0x10 Q 0x11 Q1 0x12 Q2 0x13 Q3 0x14 Q4 0x15 Q5 0x16 Q6 0x17 Q7 0x18 Q8 0x19 Q9 \
-			0x20 Q' 0x21 Q'1 0x22 Q'2 0x23 Q'3 0x24 Q'4 0x25 Q'5 0x26 Q'6 0x27 Q'7 0x28 Q'8 0x29 Q'9]
+			set Axis_dict [dict create 0x00 t 0x10 Q 0x20 Q']
+			for {set a 1} {$a<10} {incr a} {
+				dict set Axis_dict 0x1$a Q$a
+				dict set Axis_dict 0x2$a Q'$a
+			}
 			if {$datatype == 0x1A} {
-				if {$magic == "**TI85**"} {
-					entryd	"X axis" [hex 1] 1 $Axis_bytes
-					entryd	"Y axis" [hex 1] 1 $Axis_bytes
-				} elseif {$magic == "**TI86**"} {
-					entryd	"FldOff x axis" [hex 1] 1 $Axis_bytes
-					entryd	"FldOff y axis" [hex 1] 1 $Axis_bytes
-					entryd	"SlpFld y axis" [hex 1] 1 $Axis_bytes
-					entryd	"DirFld x axis" [hex 1] 1 $Axis_bytes
-					entryd	"DirFld y axis" [hex 1] 1 $Axis_bytes
-					read85Numb dTime
-					read85Numb fldRes
-					read85Numb EStep
+				entryd	"FldOff x axis" [hex 1] 1 $Axis_dict
+				entryd	"FldOff y axis" [hex 1] 1 $Axis_dict
+				if {$magic != "**TI85**"} {
+					entryd	"SlpFld y axis" [hex 1] 1 $Axis_dict
+					entryd	"DirFld x axis" [hex 1] 1 $Axis_dict
+					entryd	"DirFld y axis" [hex 1] 1 $Axis_dict
+					foreach a {dTime fldRes EStep} {
+						read85Numb $a
+					}
 				}
 			}
 		}
-		default {
-			bytes	$fallbacksize Data
-		}
+		default { bytes $fallbacksize Data }
 	}
 	endsection
 }
-
 
 proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 	section -collapsed Data
@@ -802,9 +710,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 		0x1E -
 		0x1F -
 		0x20 -
-		0x21 {
-			readZ80Numb
-		}
+		0x21 { readZ80Numb }
 		0x01 -
 		0x0D {
 			set	n [uint16 "Indices"]
@@ -812,8 +718,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 				readZ80Numb [expr $a+1]
 			}
 		}
-		0x02 -
-		0x0E {
+		0x02 {
 			set	Width [expr [uint8 "Width"]]
 			set	Height [expr [uint8 "Height"]]
 			for {set a 0} {$a<$Width*$Height} {incr a} {
@@ -822,10 +727,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 		}
 		0x03 -
 		0x04 -
-		0x0B {
-			set	datasize [size_field Code]
-			BAZIC	$datasize
-		}
+		0x0B { BAZIC [size_field Code] }
 		0x05 -
 		0x06 {
 			set	datasize [size_field Code]
@@ -836,7 +738,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 				move	-2
 			}
 
-			if {$assembly == 0xBB6D} { # 8\[43\]P? Z80
+			if {$assembly == 0xBB6D} { # 8[43]P? Z80
 				section -collapsed Code {
 					hex	2 "Z80 token"
 					set	b1 [uint8]
@@ -845,10 +747,10 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 						# always BB6D for MirageOS
 						set	b2 [uint8]
 						move	-2
-						if {$b2 == 1 || $b2 == 3} {
+						if {$b2 in {1 3}} {
 							hex	1 "MirageOS"
 							hex	1 "Type $b2"
-							hex	30 "Button"
+							bytes	30 "Button"
 							if {$b2 == 3} {
 								hex	2 "Quit address"
 							}
@@ -931,7 +833,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 							hex	1 "Type 1"
 							hex	1 "Width"
 							hex	1 "Height"
-							hex	256 "Icon"
+							bytes	256 "Icon"
 							cstr	ascii "Description"
 						} elseif {$b2 == 2} {
 							hex	4 "jp"
@@ -941,14 +843,14 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 					}
 					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
-			} elseif {$assembly == 0xD900} { # `Stop;nop` mallard
+			} elseif {$assembly == 0xD900} { # `Stop/nop`
 				section -collapsed Code {
 					hex	6 "Mallard"
 					uint16	-hex "Start address"
 					cstr	ascii "Description"
 					bytes	[expr $datasize+$posset-[pos]] "Assembly"
 				}
-			} elseif {$assembly == 0xD500} { # `Return;nop` crash
+			} elseif {$assembly == 0xD500} { # `Return/nop` crash
 				section -collapsed Code {
 					hex	3 "Crash"
 					cstr	ascii "Description"
@@ -963,35 +865,21 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 				BAZIC	$datasize
 			}
 		}
-		0x07 {
-			bytes	[size_field] "Data"
-		}
-		0x08 {
-			readGDB $magic
-		}
+		0x07 { bytes [size_field] "Data" }
+		0x08 { readGDB $magic }
 		0x0F -
 		0x10 -
 		0x11 {
-			set	datasize [size_field]
+			size_field
+			set	values {Xmin Xmax Xscl Ymin Ymax Yscl Thetamin Thetamax Thetastep Tmin Tmax Tstep}
 			if {$magic == "**TI82**"} {
-				set	values { \
-				Xmin Xmax Xscl Ymin Ymax Yscl \
-				Thetamin Thetamax Thetastep \
-				Tmin Tmax Tstep \
-				nMin nMax UnStart VnStart nStart }
+				lappend values nMin nMax UnStart VnStart nStart
 			} else {
-				set	values { \
-				Xmin Xmax Xscl Ymin Ymax Yscl \
-				Thetamin Thetamax Thetastep \
-				Tmin Tmax Tstep \
-				PlotStart \
-				nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) \
-				PlotStep Xres \
-				w(nMin) }
+				lappend values PlotStart nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) PlotStep Xres w(nMin)
 			}
 
 			if {$datatype == 0x0F} {
-				uint8	"Reserved" ;# always zero
+				uint8	Reserved ;# always zero
 			}
 			if {$datatype == 0x11} {
 				set	values { TblStart DeltaTbl }
@@ -1000,9 +888,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 				readZ80Numb $index
 			}
 		}
-		0x15 {
-			ReadAppVar
-		}
+		0x15 { ReadAppVar }
 		0x17 {
 			set	subsize [size_field]
 			whiless $subsize {
@@ -1014,17 +900,16 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 			hex	1 "Magic 0x81"
 			bytes	[expr $datasize-1] "Data"
 		}
-		default {
-			bytes	$fallbacksize "Data"
-		}
+		default { bytes $fallbacksize Data }
 	}
 
 	endsection
 }
 
-if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
-	proc getNameZ80 {title type length} {
-		set	start [pos]
+
+proc getNameZ80 {title type length} {
+	set	start [pos]
+	if {[file exists [file join $::ThisDirectory BAZIC.txt]]} {
 		switch -- $type {
 			0x01 -
 			0x0D {
@@ -1034,7 +919,7 @@ if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
 				if {$a < 6} {
 					set	name [BAZIC_GetToken [hex 1] 0]
 				} elseif {$a == 0x40} {
-					set	name "IDList"
+					set	name "|LIDList"
 				} else {
 					set	name [string map {[ θ ] |L} [ascii $length]]
 				}
@@ -1054,62 +939,35 @@ if {[file exists [file join $ThisDirectory BAZIC.txt]]} {
 				set	name [expr {$name==""?$r($type):"$name ($r($type))"}]
 			}
 			0x1A {
-				# annoyingly, images have their own "tokenizations"
-				# first byte should be 03Ch (which I ignore, obviously)
-				# should be 0EF50h + [uint8], but I don't have arbitrary detok
-				uint8
+				# first byte should be 03Ch
+				# should be 0EF50h + [uint8], but no arbitrary detok
+				int8
 				set	name Image[expr ([uint8]+1)%10]
 			}
-			default {
-				set	name [BAZIC_GetToken [hex 1] 0]
-			}
+			default { set name [BAZIC_GetToken [hex 1] 0] }
 		}
-		goto	$start
-		entry	$title $name $length [pos]
-		move	$length
-		if {$name != "\[none]"} {
-			return	$name
-		} else {
-			return	""
-		}
+	} else {
+		set	name [string map {[ θ ] |L} [ascii $length]]
 	}
-} else {
-	proc getNameZ80 {title type length} {
-		set	start [pos]
-		set	a [hex 1]
-		move	-1
-		if {$a == 0} {
-			set	name "\[none]"
-		} else {
-			set	name [string map {[ θ ] |L} [ascii $length]]
-		}
-		goto	$start
-		entry	$title $name $length [pos]
-		move	$length
-		if {$name != "\[none]"} {
-			return	$name
-		} else {
-			return	""
-		}
-	}
+	goto	$start
+	entry	$title $name $length [pos]
+	move	$length
+	return	$name
 }
 
-
-
 proc SysTab {size magic} {
-	global	Z80typeDict
 	set	EntryStart [pos]
+	# https://wikiti.brandonw.net/index.php?title=83Plus:OS:System_Table
 	section "Entry" {
 		section "System table entry"
-		set	Flags [hex 1]
 		section -collapsed "Type" {
+			set	Flags [hex 1]
 			set	subtype [format "0x%02X" [expr $Flags & 63]]
 			# legacy Z80 equations use bit 5 for selection
 			if {($Flags & 23) == 3} {
 				set	subtype [format "0x%02X" [expr $Flags & 31]]
 			}
-			entryd	"Type" $subtype 1 $Z80typeDict
-			set	typename [dictsearch $subtype $Z80typeDict]
+			set	typename [entryd "Type" $subtype 1 $::Z80typeDict]
 			sectionvalue $Flags\ ($typename)
 			if {($Flags & 23) == 3} {
 				FlagRead $Flags 5 "Selected Z80" "Unselected Z80"
@@ -1118,8 +976,8 @@ proc SysTab {size magic} {
 			# always reset
 			FlagRead $Flags 7 "Link transfer flag"
 		}
-		set	Flags [hex 1]
 		section -collapsed Reserved {
+			set	Flags [hex 1]
 			sectionvalue $Flags
 			FlagRead $Flags 0 "Selected eZ80" "Unselected eZ80"
 			foreach a {1 2 3 4 5 6 7} {
@@ -1140,20 +998,12 @@ proc SysTab {size magic} {
 				set	length 3
 			}
 			set	name [getNameZ80 "Name data" $subtype $length]
-			if {$name == ""} {
-				sectionvalue "\[none]"
-			} else {
-				sectionvalue $name
-			}
+			sectionvalue [expr {$name == "" ?"\[none]":$name}]
 		}
 		endsection
 		Z80readBody $subtype $magic $size
-		if {$name == ""} {
-			sectionvalue "[expr [pos]-$EntryStart] bytes"
-		} else {
-			sectionvalue "$name - [expr [pos]-$EntryStart] bytes"
-		}
 		sectionname $typename\ entry
+		sectionvalue [expr {$name == ""?"":"$name - "}][expr [pos]-$EntryStart]\ bytes
 	}
 }
 
@@ -1177,7 +1027,6 @@ set	magic [ascii 8 Magic]
 if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]} {
 	move -8
 	source	[file join $ThisDirectory TI-Flash.tcl]
-	return
 } elseif {$magic in {"**TI89**" "**TI92**" "**TI92P*"}} {
 	hex	2 "Thing"
 	ascii	8 "Folder name"
@@ -1191,12 +1040,12 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 					set	wheredata [uint32 "Offset to data"]
 					set	name [ascii 8 Name]
 					set	datatype [hex 1]
-					entryd	"Type" $datatype 1 $68KtypeDict
+					set	typeName [entryd "Type" $datatype 1 $68KtypeDict]
 					# are these flags?
 					entryd	Attribute [hex 1] 1 [dict create 0x01 Locked 0x02 Archived]
 					uint16	"Items in dir"
 				}
-				sectionname [dictsearch $datatype $68KtypeDict]\ entry
+				sectionname $typeName\ entry
 				set retu [pos]
 				goto [expr $wheredata]
 				section "Body" {
@@ -1230,7 +1079,7 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 				set	typeName ""
 				set	bodyOffset [uint16 "Body offset"]
 				set	headStart [pos]
-				uint16
+				int16
 				set	datatype [hex 1]
 				move	-3
 				section "Meta" {
@@ -1247,14 +1096,13 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 					} else {
 						size_field
 
-						uint8
-						# larger 82 types are slightly offset, maybe make a returning function so the type value remains correct
+						int8
+						# larger 82 types are slightly offset
 						if {$magic=="**TI82**" && $datatype > 10} {
 							set	datatype [format "0x%02X" [expr $datatype + 4]]
 						}
-						if {$magic=="**TI85**" || $magic=="**TI86**"} {
-							set	typeName [dictsearch $datatype $85typeDict]
-							entryd	"Type" $datatype 1 $85typeDict
+						if {$magic in {"**TI85**" "**TI86**"}} {
+							set	typeName [entryd "Type" $datatype 1 $85typeDict]
 							set	namelen [uint8 Name\ length]
 							if {$namelen} {
 								set	Name [string map {[ θ} [ascii $namelen Name]]
@@ -1262,14 +1110,16 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 								entry	Name ""
 							}
 						} else {
-							set	typeName [dictsearch $datatype $Z80typeDict]
-							entryd	"Type" $datatype 1 $Z80typeDict
+							set	typeName [entryd "Type" $datatype 1 $Z80typeDict]
 							set	name [getNameZ80 Name $datatype 8]
 							if {$bodyOffset == 13} {
 								hex	1 Version
 								section -collapsed "Flags" {
 									set	Flags [hex 1]
 									sectionvalue $Flags\ ([expr ($Flags & 128) ?"Archived":"Unarchived"])
+									foreach a {0 1 2 3 4 5 6} {
+										FlagRead $Flags $a Unused
+									}
 									FlagRead $Flags 7 Archived Unarchived
 								}
 							}
@@ -1286,23 +1136,15 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 						bytes	[size_field "Data 1"] "Data 1"
 						bytes	[size_field "Data 2"] "Data 2"
 						bytes	[size_field "Data 3"] "Data 3"
-					} elseif { $magic=="**TI85**" || $magic=="**TI86**" } {
-						set	datasize [size_field]
-						85readBody $datatype $magic $datasize
+					} elseif { $magic in {"**TI85**" "**TI86**"} } {
+						85readBody $datatype $magic [size_field]
 					} else {
-						set	datasize [size_field]
-						Z80readBody $datatype $magic $datasize
+						Z80readBody $datatype $magic [size_field]
 					}
-					# sectionvalue "[expr [pos]-$start] bytes"
 				}
 
 				sectionname $typeName\ entry
-
-				if {$name == ""} {
-					sectionvalue "[expr [pos]-$headStart+2] bytes"
-				} else {
-					sectionvalue "$name - [expr [pos]-$headStart+2] bytes"
-				}
+				sectionvalue [expr {$name == ""?"":"$name - "}][expr [pos]-$headStart+2]\ bytes
 			}
 		}
 	}

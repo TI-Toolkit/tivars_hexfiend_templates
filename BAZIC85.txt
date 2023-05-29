@@ -1,4 +1,9 @@
-proc BAZIC85_GetToken {term} {
+# TI-85/86 TI-BASIC Detokenizer HexFiend template include
+# Version 1.0
+# (c) 2021-2023 LogicalJoe
+
+
+proc BAZIC85_GetToken {term {magic "**TI86**"}} {
 set	BAZIC85_00 [dict create \
 	0x01 ">Rec" \
 	0x02 ">Pol" \
@@ -363,8 +368,6 @@ set	BAZIC86_8E [dict create \
 		}
 	}
 
-	# 0x8E `PrtScrn` on TI-85 is `ZRcl` on TI-86
-
 	if {$term == 0x2D} { # string
 		set	token \"[cstr ascii]\"
 	} elseif {$term == 0x32 || $term == 0x3B || $term == 0x3C} { # equation name
@@ -377,7 +380,7 @@ set	BAZIC86_8E [dict create \
 		set	token \ [ascii [expr [uint8]-50]]>[ascii [expr [uint8]-50]]
 	} elseif {$term == 0x44} { # number
 		set	token [cstr ascii]
-	} elseif {$term == 0x8E} { # TI-86 tokens
+	} elseif {$term == 0x8E && $magic == "**TI86**"} { # TI-86 tokens
 		set	token [BAZIC85dict [hex 1] $BAZIC86_8E 8E]
 	} elseif {$term == 0xE0} { # Lbl
 		set	token \Lbl\ [cstr ascii]
@@ -391,7 +394,8 @@ set	BAZIC86_8E [dict create \
 	return $token
 }
 
-proc BAZIC85 {size} {
+# magic is required to detokenize `PrtScrn` correctly, unfortunately
+proc BAZIC85 {size {magic "**TI86**"}} {
 	section -collapsed "Code" {
 		set	start [pos]
 
@@ -403,7 +407,7 @@ proc BAZIC85 {size} {
 			set	Linestart [pos]
 			while {($term != 0x6F) && ([pos]-$start < $size)} {
 				set	term [hex 1]
-				set	line $line[BAZIC85_GetToken $term]
+				set	line $line[BAZIC85_GetToken $term $magic]
 			}
 			entry	"Line $e" $line [expr [pos]-$Linestart] $Linestart
 		}
