@@ -348,6 +348,7 @@ set	BAZIC86_8E [dict create \
 	0x24 "ZData" \
 	0x25 "Asm" \
 	0x26 "AsmComp" \
+	0x27 "AsmPrgm" \
 	0x2A "PxTest" \
 	0x2B "randInt" \
 	0x2C "randBin" \
@@ -367,10 +368,13 @@ set	BAZIC86_8E [dict create \
 			return	%$c[format "%02X" $a]%
 		}
 	}
+	proc 85fontmap {s} {
+		return [string map {\xC1 θ} $s]
+	}
 
 	if {$term == 0x2D} { # string
 		set	token \"[cstr ascii]\"
-	} elseif {$term == 0x32 || $term == 0x3B || $term == 0x3C} { # equation name
+	} elseif {$term in {0x32 0x3B 0x3C}} { # equation name
 		set	token [ascii [uint8]]
 	} elseif {$term >= 0x33 && $term <=0x3A} { # variable name
 		set	token [ascii [expr $term-50]]
@@ -391,12 +395,25 @@ set	BAZIC86_8E [dict create \
 	} else {
 		set	token [BAZIC85dict $term $BAZIC85_00]
 	}
+	# how to account for carrage returns?
+	if {$token == "AsmPrgm"} { # Tokenized Assembly
+		set	token $token\ [cstr ascii]
+	}
 	return $token
 }
 
 # magic is required to detokenize `PrtScrn` correctly, unfortunately
 proc BAZIC85 {size {magic "**TI86**"}} {
 	section -collapsed "Code" {
+		if {$size>1} {
+			set	e [hex 2]
+			move	-2
+			if {$e == 0x8E29} {
+				hex	2 "Edit-lock"
+				incr	size -2
+			}
+		}
+
 		set	start [pos]
 
 		set	e 0
