@@ -17,9 +17,9 @@ proc size_field {{title Data}} {
 
 set ThisDirectory [file dirname [file normalize [info script]]]
 
-foreach a {BAZIC BAZIC85} {
-	if {[file exists [file join $ThisDirectory $a.txt]]} {
-		source	[file join $ThisDirectory $a.txt]
+foreach a {BAZIC BAZIC85 BAZIC81} {
+	if {[file exists [file join $ThisDirectory BAZIC $a.txt]]} {
+		source	[file join $ThisDirectory BAZIC $a.txt]
 	} else {
 		proc $a {size {a a}} {
 			if {$size} {
@@ -319,19 +319,19 @@ proc readGDB {} {
 	set	numbs "Xmin Xmax Xscl Ymin Ymax Yscl"
 	switch -- $Mode {
 		16	{
-			set	EquNames "Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0"
+			set	EquSets "Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0"
 			if $isn82 { lappend numbs Xres }
 		}
 		32	{
-			set	EquNames "r1 r2 r3 r4 r5 r6"
+			set	EquSets "r1 r2 r3 r4 r5 r6"
 			lappend numbs thetamin thetamax thetastep
 		}
 		64	{
-			set	EquNames "X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T"
+			set	EquSets "X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T"
 			lappend numbs Tmin Tmax Tstep
 		}
 		128	{
-			set	EquNames "u v[expr $isn82?" w":""]"
+			set	EquSets "u v[expr $isn82?" w":""]"
 			append numbs [expr $isn82?{ PlotStart nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin+1) PlotStep w(nMin)}:{ nMin nMax UnStart VnStart nStart}]
 		}
 	}
@@ -343,14 +343,14 @@ proc readGDB {} {
 
 	if $isn82 {
 		section "Styles" {
-			foreach index $EquNames {
+			foreach index $EquSets {
 				entryd	"$index Style" [uint8] 1 [dict create 0 Thin\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 Thick\ dotted\ line 7 Thin\ dotted\ line]
 			}
 		}
 	}
 
 	section Equations
-	foreach index [join [split $EquNames /]\ ] {
+	foreach index [join [split $EquSets /]\ ] {
 		section $index {
 			section -collapsed "Flags" {
 				set	Flags [hex 1]
@@ -374,7 +374,7 @@ proc readGDB {} {
 		9 LTBLUE 10 YELLOW 11 WHITE 12 LTGRAY \
 		13 MEDGRAY 14 GRAY 15 DARKGRAY 16 Off]
 
-		foreach index $EquNames {
+		foreach index $EquSets {
 			entryd	"$index color" [uint8] 1 $oscolors
 		}
 		entryd	"Grid color" [uint8] 1 $oscolors
@@ -507,7 +507,7 @@ proc read85GDB {type {magic "**TI86**"}} {
 		section Styles {
 			for {set a 1} {$a < $StyleCount} {incr a} {
 				set b [expr {$a % 2 ? [uint8] : $b << 4}]
-				entryd	$EquName$a\ Style [expr $b>>4&15] 1 [dict create 0 Solid\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 dotted\ line]
+				entryd	$EquName$a\ Style [expr $b>>4&15] 1 [dict create 0 Solid\ line 1 Thick\ line 2 Shade\ above 3 Shade\ below 4 Trace 5 Animate 6 Dotted\ line]
 			}
 		}
 	}
@@ -879,10 +879,9 @@ proc Z80readBody {datatype {magic "**TI83F*"} {fallbacksize 0}} {
 	endsection
 }
 
-
 proc getNameZ80 {title type length} {
 	set	start [pos]
-	if {[file exists [file join $::ThisDirectory BAZIC.txt]]} {
+	if {[file exists [file join $::ThisDirectory BAZIC BAZIC.txt]]} {
 		switch -- $type {
 			0x01 -
 			0x0D {
@@ -997,9 +996,8 @@ if {[len] < 8} {
 }
 set	magic [ascii 8 Magic]
 
-if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]} {
-	move -8
-	source	[file join $ThisDirectory TI-Flash.tcl]
+if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.txt]]} {
+	source	[file join $ThisDirectory TI-Flash.txt]
 } elseif {$magic in {"**TI89**" "**TI92**" "**TI92P*"}} {
 	hex	2 "Thing"
 	ascii	8 "Folder name"
@@ -1114,6 +1112,17 @@ if {$magic=="**TIFL**" && [file exists [file join $ThisDirectory TI-Flash.tcl]]}
 		}
 	}
 	CheckSum 55 [pos]
+} elseif {$magic == "**TI81**"} {
+	hex	2 "Thing"
+	set	size [size_field Code]
+	set	name ""
+	for_n 8 { # simplified detok
+		set	a [uint8]
+		set	name $name[format %c [expr {$a<86?$a+32:$a>86?$a-24:20}]]
+	}
+	entry	Name $name 8 [expr [pos]-8]
+	BAZIC81 $size
+	CheckSum 12 [pos]
 } else {
 	requires 0 0
 }

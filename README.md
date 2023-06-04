@@ -1,12 +1,14 @@
-# TI-graphing calculator-related format HexFiend template[s]
+# TI Graphing Calculator-Related Format HexFiend Template[s]
 Version 1.0
 Template set by LogicalJoe
 
-`TI-flash.tcl` is for OS's and applications (i.e. 8xk, 8xu, 8ek, 8eu)
-`TI.tcl` is for non-flash TI files, including backups (i.e. 8xp, 83p, 86d, ect)
+`TI.tcl` is the main template; it includes all avaliable files as needed.
+The `BAZIC/` directory contains files relating to TI-BASIC detokenization.
 
-This project is primarily meant for `.8x#` files but can read other files,
-though functionality is not guaranteed
+These templates are primarily designed for TI-Z80 calculators:
+Files with the extension `.8[23x56]*` are generally assumed to work.
+
+68K model files (`.89*` and `.9[2x]*`) are WIP.
 
 ## Installation
 
@@ -15,7 +17,7 @@ hexFiend is avaliable [here](https://github.com/HexFiend/HexFiend).
 1. Open Hexfiend's Binary Template browser (select View>Binary Templates)
 2. Select "Open Templates Folder" from the Template list
 3. Copy this folder to the folder that is opened
-4. Select `TI` or `TI-flash` from HexFiend's template list to use it
+4. Select `TI` from HexFiend's template list to use it.
 
 ## Other stuff
 

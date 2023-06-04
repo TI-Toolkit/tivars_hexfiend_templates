@@ -156,9 +156,6 @@ set ProdIDs [dict create \
 0x15 "TI-82AEP"]
 
 
-requires	0 "2A 2A 54 49 46 4C 2A 2A"
-
-ascii	8 "Header"
 section	"File packaging" {
 	entry	"Version" "[format %x [uint8]].[format %x [uint8]]" 2 [expr [pos]-2]
 	set	binary [hex 1]
