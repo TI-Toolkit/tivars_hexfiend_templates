@@ -247,8 +247,7 @@ set 68KRPN_TAGS [dict create \
 ]
 
 	set	tag_type [hex 1]
-	entryd	TAG $tag_type 1 $68KRPN_TAGS]
-	set	tag_name "[dictsearch $tag_type $68KRPN_TAGS]"
+	set	tag_name [entryd TAG $tag_type 1 $68KRPN_TAGS]
 	move	-2
 	switch $tag_name {
 		EXT_SYSTEM {

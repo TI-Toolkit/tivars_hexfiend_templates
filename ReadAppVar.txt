@@ -8,13 +8,7 @@
 # F347BFAB - Cell Sheet state
 # F347BFAF - Notefolio
 
-proc ReadAppVar {} {
-	proc av_size_field {{title Data}} {
-		set	s [uint16]
-		entry	"$title size" $s\ byte[expr $s-1?"s":""] 2 [expr [pos]-2]
-		return	$s
-	}
-
+proc ReadAppVar {datasize} {
 	proc readByLine {codesize {deliminator 10} {terminator 500}} {
 		section	-collapsed "Body"
 		set	start [pos]
@@ -59,7 +53,6 @@ proc ReadAppVar {} {
 		return $b
 	}
 
-	set	datasize [av_size_field]
 	set	head 0
 	if {$datasize > 4} {
 		set	head [str 4 ascii]
@@ -257,9 +250,9 @@ proc ReadAppVar {} {
 				sectionvalue $a
 				set	r [uint8 Datatype]
 				switch -- $r {
-					0	{ readTINumb }
+					0	{ readZ80Numb }
 					1	{ BAZIC [expr $secsiz-8] }
-					3	{ readTINumb Current
+					3	{ readZ80Numb Current
 						BAZIC [expr $secsiz-17] }
 				}
 				hex	2 Cell\ #

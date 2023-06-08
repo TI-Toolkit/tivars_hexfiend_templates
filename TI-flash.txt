@@ -4,15 +4,6 @@
 
 
 if [catch {
-# entrydict label value length dict
-proc entrydict {a b c d} {
-	if [dict exists $d $b] {
-		entry	$a [dict get $d $b] $c [expr [pos]-$c]
-	} else {
-		entry	$a $b $c [expr [pos]-$c]
-	}
-}
-
 proc uint24l {a {b -1}} {
 	if {$b==-1} {
 		entry	$a [format "0x%06X" [set x [uint24]]] 3 [expr [pos]-3]
@@ -134,7 +125,7 @@ proc readTIHex {} {
 
 		set	type [readAsciiHex]
 		#entry	"Field type" $type 2 [expr [pos]-2]
-		entrydict	"Field type" $type 2 [dict create 0 Data 1 End 2 Page]
+		entryd	"Field type" $type 2 [dict create 0 Data 1 End 2 Page]
 		if {!$type} {sectioncollapse}
 
 		if {$size != 0} {
@@ -146,28 +137,18 @@ proc readTIHex {} {
 	return	$type
 }
 
-# 73, 82A, 83P, and 84P use 0x00
-set ProdIDs [dict create \
-0x00 "Z80" \
-0x03 "TI-89" \
-0x08 "TI-Voyage 200" \
-0x09 "TI-89 Titanium" \
-0x13 "TI-8\[34]PCE" \
-0x15 "TI-82AEP"]
-
-
 section	"File packaging" {
 	entry	"Version" "[format %x [uint8]].[format %x [uint8]]" 2 [expr [pos]-2]
 	set	binary [hex 1]
-	entrydict	"Binary flag" $binary 1 [dict create 0x00 "Binary" 0x01 "INTEL"]
-	entrydict	"Object type" [hex 1] 1 [dict create 0x00 "!Z80" 0x88 "Z80"]
+	entryd	"Binary flag" $binary 1 [dict create 0x00 "Binary" 0x01 "INTEL"]
+	entryd	"Object type" [hex 1] 1 [dict create 0x00 "!Z80" 0x88 "Z80"]
 	hex	4 "Date"
 	entry	"Name" "[uint8],[ascii 8]" 9 [expr [pos]-9]
-	hex	23 "NULLs"
-	entrydict	"Calc type" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
-	entrydict	"Variable type" [hex 1] 1 [dict create 0x23 "OS" 0x24 "APP" 0x25 "Cert" 0x3E "License"]
-	hex	23 "NULLs"
-	entrydict	"Prod ID" [hex 1] 1 $ProdIDs
+	bytes	23 Unused
+	entryd	"Owner Calc ID" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
+	entryd	"Type" [hex 1] 1 $Z80typeDict
+	bytes	23 Unused
+	entryd	"Owner Prod ID" [hex 1] 1 $ProdIDs
 	set	datasize [uint32]
 	entry	"Data size" $datasize 4 [expr [pos]-4]
 }
