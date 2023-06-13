@@ -19,8 +19,13 @@ set CurDir [file dirname [file normalize [info script]]]
 if {[info command hf_min_version_required] ne ""} {
 	hf_min_version_required 2.17
 } else {
-	puts stderr "Template must be used in HexFiend"
-	return
+	set	b [file join $CurDir hexfiend.txt]
+	if [file exists $b] {
+		source	$b
+	} else {
+		puts	stderr "Template must be used in HexFiend"
+		return
+	}
 }
 
 proc len_field {{title Data}} {

@@ -1,0 +1,191 @@
+namespace eval hf_file {
+	variable indent
+	variable fileData
+	variable position
+	variable endian
+	set indent 0
+	set position 0
+	set endian 0
+}
+
+proc uint8 {{name "\0\0"}} {
+	set byte [string index $hf_file::fileData $hf_file::position]
+	set uint8 [scan $byte "%c"]
+	if {$name != "\0\0"} {
+		entry $name $uint8
+	}
+	incr hf_file::position
+	return $uint8
+}
+
+proc uint16 {args} {
+	set byte1 [string index $hf_file::fileData $hf_file::position]
+	set byte2 [string index $hf_file::fileData [expr $hf_file::position + 1]]
+	if {$hf_file::endian == 0} {
+		set uint16 [expr {[scan $byte2 "%c"] << 8 | [scan $byte1 "%c"]}]
+	} else {
+		set uint16 [expr {[scan $byte1 "%c"] << 8 | [scan $byte2 "%c"]}]
+	}
+
+	if {[llength $args] == 1} {
+		if {[lindex $args 0] != "-hex"} {
+			entry [lindex $args 0] $uint16
+		}
+	} elseif {[llength $args] == 2} {
+		if {[lindex $args 0] == "-hex"} {
+			entry [lindex $args 1] [format "0x%04X" $uint16]
+		} else {
+			puts stderr ""
+		}
+	}
+
+	incr hf_file::position 2
+	return $uint16
+}
+
+proc int16 {{name "\0\0"}} {
+	set byte1 [string index $hf_file::fileData $hf_file::position]
+	set byte2 [string index $hf_file::fileData [expr $hf_file::position + 1]]
+	set int16 [expr {([scan $byte1 "%c"] << 8 | [scan $byte2 "%c"]) - 65536 * ([scan $byte1 "%c"] & 0x80 ? 1 : 0)}]
+	if {$name != "\0\0"} {
+		entry $name $int16
+	}
+	incr hf_file::position 2
+	return $int16
+}
+
+proc uint32 {{name "\0\0"}} {
+	set byte1 [string index $hf_file::fileData $hf_file::position]
+	set byte2 [string index $hf_file::fileData [expr $hf_file::position + 1]]
+	set byte3 [string index $hf_file::fileData [expr $hf_file::position + 2]]
+	set byte4 [string index $hf_file::fileData [expr $hf_file::position + 3]]
+	set uint32 [expr {[scan $byte4 "%c"] << 24 | [scan $byte3 "%c"] << 16 | [scan $byte2 "%c"] << 8 | [scan $byte1 "%c"]}]
+	if {$name != "\0\0"} {
+		entry $name $uint32
+	}
+	incr hf_file::position 4
+	return $uint32
+}
+
+proc ascii {value {name "\0\0"}} {
+	set endPos [expr $hf_file::position + $value - 1]
+	set string [string range $hf_file::fileData $hf_file::position $endPos]
+	if {$name != "\0\0"} {
+		entry $name $string
+	}
+	incr hf_file::position $value
+	return $string
+}
+
+proc section {args} {
+	set body "\0\0"
+	if {[llength $args] == 1} {
+		set name [lindex $args 0]
+	} elseif {[llength $args] == 2} {
+		if {[lindex $args 0] == "-collapsed"} {
+			set name [lindex $args 1]
+		} else {
+			set name [lindex $args 0]
+			set body [lindex $args 1]
+		}
+	} elseif {[llength $args] == 3} {
+		if {[lindex $args 0] != "-collapsed"} {
+			puts stderr "blah"
+		}
+		set name [lindex $args 1]
+		set body [lindex $args 2]
+	}
+	puts [string repeat " " $hf_file::indent]\"$name\"\ \{
+	incr hf_file::indent
+	if {$body != "\0\0"} {
+		uplevel	1 $body
+		incr hf_file::indent -1
+		puts [string repeat " " $hf_file::indent]\}
+	}
+}
+
+proc sectionvalue {name} {
+	entry sectionvalue $name
+}
+
+proc endsection {} {
+	incr hf_file::indent -1
+	puts [string repeat " " $hf_file::indent]\}
+}
+
+proc sectionname {name} {
+	entry sectionname $name
+}
+
+
+proc bytes {value {name "\0\0"}} {
+	if {$name != "\0\0"} {
+		entry $name ""
+	}
+	incr hf_file::position [expr $value]
+	return ""
+}
+
+proc hex {value {name "\0\0"}} {
+	set hexString "0x"
+	set endPos [expr $hf_file::position + $value - 1]
+	for {set i $hf_file::position} {$i <= $endPos} {incr i} {
+		set byte [string index $hf_file::fileData $i]
+		set hexByte [format "%02X" [scan $byte "%c"]]
+		append hexString $hexByte
+	}
+	if {$name != "\0\0"} {
+		entry $name $hexString
+	}
+	incr hf_file::position $value
+	return $hexString
+}
+
+proc pos {} {
+	return $hf_file::position
+}
+
+proc len {} {
+	return [string length $hf_file::position]
+}
+
+proc little_endian {} {
+	set hf_file::endian 0
+}
+
+proc big_endian {} {
+	set hf_file::endian 1
+}
+
+proc requires {offset values} {
+	# idk just lazy
+}
+
+proc goto {value} {
+	if {$value < 0} {
+		set hf_file::position [expr [string length $hf_file::fileData] + $value]
+	} else {
+		set hf_file::position $value
+	}
+}
+
+proc move {value} {
+	set hf_file::position [expr $hf_file::position + $value]
+}
+
+proc entry {name value args} {
+	puts [string repeat " " $hf_file::indent]\"$name\":\ \"$value\"
+}
+
+
+if {[llength $argv] < 1} {
+	puts stderr "Need file"
+	exit
+}
+set fileHandle [open [lindex $argv 0] "rb"]
+if {$fileHandle == ""} {
+	puts stderr "Failed to open the file."
+	exit
+}
+set hf_file::fileData [read $fileHandle]
+close $fileHandle
