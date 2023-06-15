@@ -4,6 +4,7 @@
 
 
 # F347BFA7 - Study cards
+# F347BFA8 - Study cards settings
 # F347BFAA - Cell Sheet
 # F347BFAB - Cell Sheet state
 # F347BFAF - Notefolio
@@ -231,6 +232,20 @@ proc ReadAppVar {datasize} {
 		goto	$start
 		move	$datasize
 		endsection
+	} elseif {$head == "\xf3\x47\xbf\xa8"} {
+		hex	4 "Study cards settings"
+		section Flags {
+			set flags [uint8]
+			# 0 & 1 are exclusive
+			FlagRead $flags 0 "Keep known cards"
+			FlagRead $flags 1 "Re-introduce cards"
+			FlagRead $flags 2 "Shuffle cards"
+			FlagRead $flags 3 "Ignore levels"
+			FlagRead $flags 4 "Animate flip"
+			FlagRead $flags 5 "5 Box mode"
+			foreach a {6 7} { FlagRead $flags $a }
+		}
+		bytes	9 "Unused/Unknown"
 	} elseif {$head == "\xf3\x47\xbf\xaa" || $head == "\xf3\x47\xbf\xab"} {
 		section -collapsed "Data"
 		hex	4 CelSheet
@@ -279,28 +294,89 @@ proc ReadAppVar {datasize} {
 	} elseif {$head == "CaJu"} {
 		section -collapsed "Data"
 		hex	4 CabriJr
-		hex	1 Type ;# 0x46 | 0x66
-		set	struct [hex 1]
-		if {$struct==0x04} {
-			entry	Structure 4\ (Uncompressed) 1 [expr [pos]-1]
-			hex	1 Unknown
-			uint16	Unknown
-			hex	1 Unknown
-			set	n [uint8]
-			entry	"offset to name" [expr 21*$n] 1 [expr [pos]-1]
-			hex	[expr $datasize-11] Data
-		} else {
-			entry	Structure $struct\ (Compressed) 1 [expr [pos]-1]
-			# if Number==4 && Number2==90h: Type=66h
-			hex	1 Unread
-			set	n [hex 1] ;# needs neg if bit 7
-			entry	$n [format "0x%04X" [expr 2*$n+36]] 1 [expr [pos]-1]
-			set	n [hex 1]
-			entry	$n [format "0x%04X" [expr 2*$n+18]] 1 [expr [pos]-1]
-			# each block is 18 bytes
-			set	n [uint8 "Block count"]
-			for {set a 0} {$a < $n} {incr a} {
-				hex	18 Block\ $a
+		set type [entryd Type [ascii 1] 1 "f File l Language"]
+		#set	type [hex 1 Type] ;# 0x46 | 0x66 | 0x6C
+		if {$type == "File"} {
+			set	struct [hex 1]
+			if {$struct==0x04} {
+				entry	Structure 4\ (Uncompressed) 1 [expr [pos]-1]
+				hex	1 Unknown
+				uint16	Unknown
+				hex	1 Unknown
+				set	n [uint8]
+				entry	"offset to name" [expr 21*$n] 1 [expr [pos]-1]
+				hex	[expr $datasize-11] Data
+			} else {
+				entry	Structure $struct\ (Compressed) 1 [expr [pos]-1]
+				# if Number==4 && Number2==90h: Type=66h
+				hex	1 Unread
+				set	n [hex 1] ;# needs neg if bit 7
+				entry	$n [format "0x%04X" [expr 2*$n+36]] 1 [expr [pos]-1]
+				set	n [hex 1]
+				entry	$n [format "0x%04X" [expr 2*$n+18]] 1 [expr [pos]-1]
+				# each block is 18 bytes
+				set	n [uint8 "Block count"]
+				for {set a 0} {$a < $n} {incr a} {
+					hex	18 Block\ $a
+				}
+			}
+		} elseif {$type == "Language"} {
+			hex 2 "Unknown (0x015F)"
+			ascii 3 "Lang ID"
+			set start [pos]
+			set start2 [pos]
+			set lines [split [ascii [expr $datasize-10]] \x0D]
+			goto $start
+			set lineIndex -1
+			for {set mainMenu 1} {$mainMenu < 6} {incr mainMenu} {
+				set submenus ""
+				incr lineIndex
+				section -collapsed F$mainMenu {
+					foreach word [split [lindex $lines $lineIndex] ","] {
+						if {$word == ""} {
+							lappend submenus $prevWord
+						} else {
+							entry Word $word [string length $word] $start
+						}
+						incr start [expr [string length $word]+1]
+						move [expr [string length $word]+1]
+						set prevWord $word
+					}
+					set submenus [lsearch -all -inline -regexp $submenus {\S+}]
+					foreach menu $submenus {
+						incr lineIndex
+						section $menu {
+							foreach word [split [lindex $lines $lineIndex] ","] {
+								entry Word $word [string length $word] $start
+								incr start [expr [string length $word]+1]
+								move [expr [string length $word]+1]
+							}
+						}
+					}
+				}
+			}
+			move	-1
+			# 0D0D2C3B0D is end of menus
+			hex 5 Menus\ end
+			section -collapsed Texts {
+				foreach line [lrange $lines [expr $lineIndex+3] [expr $lineIndex+24]] {
+					entry Word $line [string length $line] [pos]
+					move [expr [string length $line]+1]
+				}
+			}
+			incr	lineIndex 25
+			set count 1
+			while {$count} {
+				section -collapsed "Help screen" {
+					set count [lindex $lines $lineIndex]
+					ascii 1 "Lines"
+					move 1
+					foreach line [lrange $lines [expr $lineIndex+1] [expr $lineIndex+$count]] {
+						entry 0 $line [string length $line] [pos]
+						move [expr [string length $line]+1]
+					}
+					incr lineIndex [expr $count+1]
+				}
 			}
 		}
 		endsection

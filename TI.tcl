@@ -33,7 +33,7 @@ foreach a {BAZIC BAZIC85 BAZIC81} {
 }
 
 foreach a {ReadAppVar 68KRPN Assembly} {
-	set b [file join $CurDir BAZIC $a.txt]
+	set b [file join $CurDir $a.txt]
 	if [file exists $b] {
 		source	$b
 	} else {
@@ -129,6 +129,7 @@ set	Z80typeDict [dict create \
 	0x16 "Temporary" \
 	0x17 "Group" \
 	0x18 "Real Fraction" \
+	0x19 "Directory" \
 	0x1A "Image" \
 	0x1B "Complex Fraction" \
 	0x1C "Real radical" \
@@ -953,8 +954,11 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.txt]]} {
 				uint16	-hex "Address of data 2"
 			} else {
 				len_field
-				if {[uint8] > 10 && $magic=="**TI82**"} {
+				if {[set n [uint8]] > 10 && $magic=="**TI82**"} {
 					set	datatype [format "0x%02X" [expr $datatype + 4]]
+				}
+				if {$n == 0x1A && $magic=="**TI73**"} {
+					set	datatype 0x15
 				}
 				if {$magic in {"**TI85**" "**TI86**"}} {
 					set	typeName [entryd "Type" $datatype 1 $85typeDict]
