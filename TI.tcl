@@ -1,11 +1,23 @@
 # TI graphing calculator format HexFiend template
-# Version 1.0
+# Version 2.0
 # (c) 2021-2023 LogicalJoe
+# .types = (
+# .73g, 73i, 73l, 73n, 73p, 73s, 73t, 73v, 73w, 73y, 73z,
+# .82b, 82d, 82g, 82i, 82l, 82m, 82n, 82p, 82s, 82t, 82w, 82y, 82z,
+# .83b, 83c, 83d, 83g, 83i, 83l, 83m, 83n, 83p, 83s, 83t, 83w, 83y, 83z,
+# .8xb, 8xc, 8xd, 8xg, 8xi, 8xl, 8xm, 8xn, 8xo, 8xp, 8xs, 8xt, 8xv, 8xw, 8xy, 8xz,
+# .85b, 85c, 85d, 85g, 85i, 85k, 85l, 85m, 85n, 85p, 85s, 85v, 85w,
+# .86b, 86c, 86d, 86g, 86i, 86k, 86l, 86m, 86n, 86p, 86s, 86v, 86w,
+# .8cq, 8xq,
+# .73k, 8xk, 8ck, 8ek,
+# .73u, 82u, 8cu, 8eu, 8pu, 8xu, 8yu,
+# .b83, b84,
+# .8cb, 8cg, 8xidl);
 
 set CurDir [file dirname [file normalize [info script]]]
 
 if {[info command hf_min_version_required] ne ""} {
-	hf_min_version_required 2.15
+	hf_min_version_required 2.17
 } else {
 	puts stderr "Template must be used in HexFiend"
 	return
@@ -17,8 +29,8 @@ proc len_field {{title Data}} {
 	return	$s
 }
 
-foreach a {BAZIC BAZIC85 BAZIC81} {
-	set b [file join $CurDir BAZIC $a.txt]
+foreach a {BAZIC83 BAZIC85 BAZIC81 BAZIC73} {
+	set b [file join $CurDir BAZIC $a.tcl]
 	if [file exists $b] {
 		source	$b
 	} else {
@@ -32,8 +44,16 @@ foreach a {BAZIC BAZIC85 BAZIC81} {
 	}
 }
 
+proc BAZIC {len {magic ""}} {
+	if {$magic == "**TI73**"} {
+		BAZIC73 $len
+	} else {
+		BAZIC83 $len
+	}
+}
+
 foreach a {ReadAppVar 68KRPN Assembly} {
-	set b [file join $CurDir $a.txt]
+	set b [file join $CurDir $a.tcl]
 	if [file exists $b] {
 		source	$b
 	} else {
@@ -47,8 +67,8 @@ foreach a {ReadAppVar 68KRPN Assembly} {
 	}
 }
 
-if [file exists [file join $CurDir Assembly.txt]] {
-	source	[file join $CurDir Assembly.txt]
+if [file exists [file join $CurDir Assembly.tcl]] {
+	source	[file join $CurDir Assembly.tcl]
 } else {
 	proc isAsm {asm} {
 		return [expr {$asm in {0xEF7B 0xEF69 0xBB6D}}]
@@ -143,10 +163,31 @@ set	Z80typeDict [dict create \
 	0x25 "Certificate" \
 	0x26 "ID-List" \
 	0x27 "Certificate Memory" \
+	0x28 "Unit Certificate" \
 	0x29 "Clock" \
 	0x3E "Flash License" \
 ]
 
+set	82typeDict [dict create \
+	0x0B "Window setup" \
+	0x0C "Recall Window" \
+	0x0D "TableSet" \
+	0x0F "Backup" \
+	0x1F "Group" \
+]
+
+set	73typeDict [dict create \
+	0x0D "Categorical list" \
+	0x14 "RSFraction" \
+	0x15 "RMFraction" \
+	0x16 "USFraction" \
+	0x17 "UMFraction" \
+	0x18 "Category" \
+	0x1A "AppVar" \
+	0x1B "Temporary" \
+]
+
+# 0x14 is `New Equation` on TI-86
 set	85typeDict [dict create \
 	0x00 "Real" \
 	0x01 "Complex" \
@@ -167,13 +208,15 @@ set	85typeDict [dict create \
 	0x11 "Picture" \
 	0x12 "Program" \
 	0x14 "LCD / PrintScreen" \
+	0x15 "Full Directory" \
 	0x17 "Function window" \
 	0x18 "Polar window" \
 	0x19 "Param window" \
 	0x1A "DifEq window" \
 	0x1B "Recall window" \
 	0x1D "Backup" \
-	0x1E "Unknown" \
+	0x1E "ScreenShot" \
+	0x1F "Group" \
 ]
 
 set	68KtypeDict [dict create \
@@ -190,12 +233,14 @@ set	68KtypeDict [dict create \
 	0x13 "Function" \
 	0x14 "Macro" \
 	0x18 "Clock" \
-	0x1A "Request Directory" \
+	0x19 "Full Directory" \
+	0x1A "Filter Directory" \
 	0x1B "Local Directory" \
-	0x1C "STDY" \
+	0x1C "Appvar" \
 	0x1D "Backup" \
-	0x1F "Directory" \
-	0x20 "Get Certificate" \
+	0x1E "Snapshot" \
+	0x1F "Folder" \
+	0x20 "Certificate Memory" \
 	0x21 "Assembly program" \
 	0x22 "ID-List" \
 	0x23 "OS" \
@@ -256,7 +301,7 @@ proc read85Numb {{index ""}} {
 	internalNumber $index 0
 }
 
-proc readZ80Numb {{index ""}} {
+proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 	proc readTIFloat {{index ""} {recursed 0}} {
 		set	bitbyte [uint8]
 		set	type [expr $bitbyte & 63]
@@ -271,7 +316,7 @@ proc readZ80Numb {{index ""}} {
 		set	Sign [expr $bitbyte & 128?"-":"+"]
 		set	Power [expr [uint8]-128]
 		set	Body [hex 7]
-		set	Body [string range $Body 2 2].[string range $Body 3 15]
+		set	Body [string index $Body 2].[string range $Body 3 15]
 		entry	"$Name $index" "$Sign$Body\e$Power" 9 [expr [pos]-9]
 		if {!$recursed && $type in {12 27 30 31}} {
 			readTIFloat "$index\c" 1
@@ -292,8 +337,37 @@ proc readZ80Numb {{index ""}} {
 			readTIRadical "$index\c" 1
 		}
 	}
-
-	readTIFloat $index 0
+	set a [uint8]
+	move -1
+	if ![hex 9] {
+		entry TI-Float\ $index DNE 9 [expr [pos]-9]
+	} elseif {($a&0x7F) in {20 21 22 23 24} && $magic == "**TI73**"} {
+		move	-8
+		set	Body [hex 8]
+		set	sign [expr $a & 128?"-":"+"]
+		set	den [string range $Body 12 15]
+		switch [expr $a & 127] {
+			20 -
+			22 {
+				set	Name TI-SFrac
+				set	numb "$sign[string range $Body 4 9]/$den"
+			}
+			21 -
+			23 {
+				set	Name TI-MFrac
+				set	numb "$sign[string range $Body 3 6].[string index $Body 7]_[string range $Body 8 10].[string index $Body 11]/$den"
+			}
+			24 {
+				move	-7
+				set	Name Category
+				set	numb [ascii 7]
+			}
+		}
+		entry	"$Name $index" $numb 9 [expr [pos]-9]
+	} else {
+		move	-9
+		readTIFloat $index 0
+	}
 }
 
 proc readGDB {} {
@@ -384,7 +458,7 @@ proc readGDB {} {
 				FlagRead $Flags 6 "Was used for graph"
 				FlagRead $Flags 7 "Link transfer flag"
 			}
-			BAZIC	[len_field Code]
+			BAZIC83	[len_field Code]
 		}
 	}
 	endsection
@@ -684,6 +758,23 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 	section -collapsed Data
 	set	start [pos]
 
+	if { $magic == "**TI73**" } {
+		switch -- $datatype {
+			0x14 - 0x15 - 0x16 - 0x17 {
+				readZ80Numb "" $magic
+				endsection
+				return
+			}
+			0x1A { set datatype 0x15 }
+			0x18 - 0x1B { set datatype 255 }
+		}
+	}
+	if { $magic == "**TI82**" } {
+		if {$datatype>0x0A && $datatype<0x0E} {
+			incr datatype 4
+		}
+	}
+
 	switch -- $datatype {
 		0x00 -
 		0x0C -
@@ -694,13 +785,13 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 		0x1E -
 		0x1F -
 		0x20 -
-		0x21 { readZ80Numb }
+		0x21 { readZ80Numb "" $magic }
 		0x01 -
 		0x0D -
 		0x26 {
 			set	n [uint16 "Indices"]
 			for {set a 0} {$n > $a} {incr a} {
-				readZ80Numb [expr $a+1]
+				readZ80Numb [expr $a+1] $magic
 			}
 		}
 		0x02 {
@@ -712,11 +803,10 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 		}
 		0x03 -
 		0x04 -
-		0x0B { BAZIC [len_field Code] }
+		0x0B { BAZIC [len_field Code] $magic }
 		0x05 -
 		0x06 {
 			set	datalen [len_field Code]
-			set	posset [pos]
 			set	assembly 0
 			if {$datalen > 1} {
 				set	assembly [hex 2]
@@ -728,7 +818,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 					ReadAsm $assembly $datalen
 				}
 			} else {
-				BAZIC	$datalen
+				BAZIC	$datalen $magic
 			}
 		}
 		0x07 { bytes [len_field] "Data" }
@@ -768,9 +858,21 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 	endsection
 }
 
-proc getNameZ80 {title type length} {
+proc getNameZ80 {title type length {magic ""}} {
 	set	start [pos]
-	if {[file exists [file join $::CurDir BAZIC BAZIC.txt]]} {
+	set bint BAZIC83
+	if {$magic == "**TI73**"} {
+		set bint BAZIC73
+		if {$type==0x1A} {
+			set type 0x15
+		}
+	}
+	if {$magic == "**TI82**"} {
+		if {$type>0x0A && $type<0x0E} {
+			incr type 4
+		}
+	}
+	if {[file exists [file join $::CurDir BAZIC $bint.tcl]]} {
 		switch -- $type {
 			0x01 -
 			0x0D {
@@ -778,7 +880,7 @@ proc getNameZ80 {title type length} {
 				set	a [hex 1]
 				move	-2
 				if {$a < 6} {
-					set	name [BAZIC_GetToken [hex 1] 0]
+					set	name [$bint\_GetToken [hex 1]]
 				} elseif {$a == 0x40} {
 					set	name "|LIDList"
 				} else {
@@ -806,7 +908,7 @@ proc getNameZ80 {title type length} {
 				int8
 				set	name Image[expr ([uint8]+1)%10]
 			}
-			default { set name [BAZIC_GetToken [hex 1] 0] }
+			default { set name [$bint\_GetToken [hex 1]] }
 		}
 	} else {
 		set	name [string map {[ θ ] |L} [ascii $length]]
@@ -886,8 +988,8 @@ if {[len] < 8} {
 }
 set	magic [ascii 8 Magic]
 
-if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.txt]]} {
-	source	[file join $CurDir TI-Flash.txt]
+if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
+	source	[file join $CurDir TI-Flash.tcl]
 } elseif {$magic in {"**TI89**" "**TI92**" "**TI92P*"}} {
 	hex	2 "Thing"
 	ascii	8 "Folder name"
@@ -954,11 +1056,12 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.txt]]} {
 				uint16	-hex "Address of data 2"
 			} else {
 				len_field
-				if {[set n [uint8]] > 10 && $magic=="**TI82**"} {
-					set	datatype [format "0x%02X" [expr $datatype + 4]]
+				set	a $Z80typeDict
+				if {[dict exists $82typeDict [hex 1]] && $magic=="**TI82**"} {
+					set	a $82typeDict
 				}
-				if {$n == 0x1A && $magic=="**TI73**"} {
-					set	datatype 0x15
+				if {[dict exists $73typeDict $datatype] && $magic=="**TI73**"} {
+					set	a $73typeDict
 				}
 				if {$magic in {"**TI85**" "**TI86**"}} {
 					set	typeName [entryd "Type" $datatype 1 $85typeDict]
@@ -970,8 +1073,8 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.txt]]} {
 						entry	Name ""
 					}
 				} else {
-					set	typeName [entryd "Type" $datatype 1 $Z80typeDict]
-					set	name [getNameZ80 Name $datatype 8]
+					set	typeName [entryd "Type" $datatype 1 $a]
+					set	name [getNameZ80 Name $datatype 8 $magic]
 					if {$bodyOffset > 11} {
 						ReadVer
 						set	a [hex 1]
@@ -1012,6 +1115,9 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.txt]]} {
 	entry	Name $name 8 [expr [pos]-8]
 	BAZIC81 $size
 	CheckSum 12 [pos]
+} elseif {[string range $magic 0 3]=="PK\x03\x04"} {
+	move	-8
+	include archives/zip.tcl
 } else {
 	requires 0 0
 }

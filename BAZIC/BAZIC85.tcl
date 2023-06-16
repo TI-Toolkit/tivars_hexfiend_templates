@@ -1,6 +1,7 @@
 # TI-85/86 TI-BASIC Detokenizer HexFiend template include
 # Version 1.0
 # (c) 2021-2023 LogicalJoe
+# .hidden = true;
 
 
 proc BAZIC85_GetToken {term {magic "**TI86**"}} {

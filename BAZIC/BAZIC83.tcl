@@ -1,9 +1,10 @@
 # Z80 TI-BASIC Detokenizer HexFiend template include
 # Version 1.0
 # (c) 2021-2023 LogicalJoe
+# .hidden = true;
 
 
-proc BAZIC_GetToken {term iceT} {
+proc BAZIC83_GetToken {term {iceT 0}} {
 set	BAZIC_00 [dict create \
 	0x01 ">DMS" \
 	0x02 ">Dec" \
@@ -295,7 +296,7 @@ set	BAZIC_5E [dict create\
 	0x28 "{X5T}" \
 	0x29 "{Y5T}" \
 	0x2A "{X6T}" \
-	0x2B "{Y7T}" \
+	0x2B "{Y6T}" \
 	0x40 "{r1}" \
 	0x41 "{r2}" \
 	0x42 "{r3}" \
@@ -893,7 +894,7 @@ set	BAZIC_EF [dict create \
 	return $token
 }
 
-proc BAZIC {size} {
+proc BAZIC83 {size} {
 	section -collapsed "Code" {
 		set	start [pos]
 		if {$size!=0} {
@@ -909,7 +910,7 @@ proc BAZIC {size} {
 			set	Linestart [pos]
 			while {($term != 0x3F) && ([pos]-$start < $size)} {
 				set	term [hex 1]
-				set	line $line[BAZIC_GetToken $term $iceT]
+				set	line $line[BAZIC83_GetToken $term $iceT]
 			}
 			entry	"Line $e" $line [expr [pos]-$Linestart] $Linestart
 		}

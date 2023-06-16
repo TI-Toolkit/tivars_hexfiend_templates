@@ -1,3 +1,5 @@
+# .hidden = true;
+
 proc 68KRPN {size} {
 
 proc Recursive_RPN {{expression ""}} {

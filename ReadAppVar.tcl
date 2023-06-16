@@ -1,6 +1,7 @@
 # TI appvar format HexFiend template include
 # Version 1.0
 # (c) 2021-2023 LogicalJoe
+# .hidden = true;
 
 
 # F347BFA7 - Study cards
@@ -295,7 +296,6 @@ proc ReadAppVar {datasize} {
 		section -collapsed "Data"
 		hex	4 CabriJr
 		set type [entryd Type [ascii 1] 1 "f File l Language"]
-		#set	type [hex 1 Type] ;# 0x46 | 0x66 | 0x6C
 		if {$type == "File"} {
 			set	struct [hex 1]
 			if {$struct==0x04} {
@@ -312,13 +312,15 @@ proc ReadAppVar {datasize} {
 				hex	1 Unread
 				set	n [hex 1] ;# needs neg if bit 7
 				entry	$n [format "0x%04X" [expr 2*$n+36]] 1 [expr [pos]-1]
-				set	n [hex 1]
-				entry	$n [format "0x%04X" [expr 2*$n+18]] 1 [expr [pos]-1]
+				set	e [hex 1]
+				entry	$e [format "0x%04X" [expr 2*$e+18]] 1 [expr [pos]-1]
 				# each block is 18 bytes
 				set	n [uint8 "Block count"]
 				for {set a 0} {$a < $n} {incr a} {
 					hex	18 Block\ $a
 				}
+				# hackfix something I don't understand
+				if {$e == 0x20} { uint16 }
 			}
 		} elseif {$type == "Language"} {
 			hex 2 "Unknown (0x015F)"

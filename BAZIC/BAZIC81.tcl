@@ -1,6 +1,7 @@
 # TI-81 TI-BASIC Detokenizer HexFiend template include
 # Version 1.0
 # (c) 2021-2023 LogicalJoe
+# .hidden = true;
 
 proc BAZIC81_GetToken {term} {
 set	BAZIC_00 [dict create \

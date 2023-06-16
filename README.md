@@ -1,5 +1,5 @@
 # TI Graphing Calculator-Related Format HexFiend Template[s]
-Version 1.0
+Version 2.0
 Template set by LogicalJoe
 
 `TI.tcl` is the main template; it includes all avaliable files as needed.
@@ -18,6 +18,9 @@ hexFiend is avaliable [here](https://github.com/HexFiend/HexFiend).
 2. Select "Open Templates Folder" from the Template list
 3. Copy this folder to the folder that is opened
 4. Select `TI` from HexFiend's template list to use it.
+
+Note: If this added multiple templates to your template list,
+HexFiend must be updated to a version >= 1.17.
 
 ## Other stuff
 

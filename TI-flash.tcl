@@ -1,7 +1,7 @@
 # TI graphing calculator flash format HexFiend template
 # Version 1.0
 # (c) 2021-2023 LogicalJoe
-
+# .hidden = true;
 
 if [catch {
 proc uint24l {a {b -1}} {
