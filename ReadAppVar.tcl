@@ -1,4 +1,4 @@
-# TI appvar format HexFiend template include
+# TI-appvar parser HexFiend template include
 # Version 1.0
 # (c) 2021-2023 LogicalJoe
 # .hidden = true;
@@ -229,9 +229,6 @@ proc ReadAppVar {datasize} {
 			move	$a
 			ReadCard $Flags
 		}
-
-		goto	$start
-		move	$datasize
 		endsection
 	} elseif {$head == "\xf3\x47\xbf\xa8"} {
 		hex	4 "Study cards settings"

@@ -1,3 +1,6 @@
+# TI eZ80/Z80 shell header parser HexFiend template include
+# Version 1.0
+# (c) 2021-2023 LogicalJoe
 # .hidden = true;
 
 proc isAsm {asm} {

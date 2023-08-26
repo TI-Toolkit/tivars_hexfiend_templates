@@ -1,4 +1,4 @@
-# TI graphing calculator format HexFiend template
+# TI graphing calculator file parser HexFiend template
 # Version 2.0
 # (c) 2021-2023 LogicalJoe
 # .types = (
@@ -11,8 +11,8 @@
 # .8cq, 8xq,
 # .73k, 8xk, 8ck, 8ek,
 # .73u, 82u, 8cu, 8eu, 8pu, 8xu, 8yu,
-# .b83, b84,
-# .8cb, 8cg, 8xidl);
+# .b83, b84, tig,
+# .8cb, 8cg, 8ci, 8xidl);
 
 set CurDir [file dirname [file normalize [info script]]]
 
@@ -123,6 +123,7 @@ set	ProdIDs [dict create \
 	0x0B "TI-82 Advanced" \
 	0x0F "TI-84 Plus CSE" \
 	0x13 "TI-84 Plus CE / TI-83 Premium CE" \
+	0x15 "TI-82 Advanced Edition Python" \
 	0x1B "TI-84 Plus T" \
 ]
 
@@ -279,95 +280,120 @@ proc ReadAxes {is86} {
 }
 
 proc read85Numb {{index ""}} {
-	proc internalNumber {index recursed} {
-		set	bitbyte [uint8]
+	section -collapsed Number\ $index
+	proc internalNumber {recursed} {
+		section -collapsed [expr $recursed?"Complex":"Real"]
+		section -collapsed "Flags" {
+			set	Flags [hex 1]
+			# TODO: what is the correct typemask?
+			set	type [format "0x%02X" [expr $Flags & 31]]
+			if {$Flags == 255} {
+				sectionvalue $Flags\ (Undefined)
+			} else {
+				sectionvalue $Flags\ ([entryd "Type" $type 1 $::85typeDict])
+				FlagRead $Flags 7 Negative\ Float Positive\ Float
+			}
+		}
 		# means undefined? unclear if exclusive to Diff GDB
-		if {$bitbyte == 255} {
-			set start [pos]
-			set string [ascii [uint8]]
-			goto [expr $start+9]
-			entry	"TI-Float $index" $string\ (undefined) 10 [expr [pos]-10]
-			return
+		if {$Flags == 255} {
+			# looks like a pstr but doesn't make sense
+			hex	1 Unknown
+			set	n "[ascii 8 String]\ (Undefined)"
+		} else {
+			set	Sign [expr $Flags & 128?"-":""]
+			set	Exp [expr [uint16]-64512]
+			entry	Exponent $Exp 2 [expr [pos]-2]
+			set	Body [hex 7]
+			set	Body [string index $Body 2].[string range $Body 3 15]
+			entry	Mantissa $Body 7 [expr [pos]-7]
+			set	n $Sign$Body\e$Exp
 		}
-		set	Sign [expr $bitbyte & 128?"-":"+"]
-		set	Power [expr [uint16]-64512]
-		set	Body [hex 7]
-		set	Body [string range $Body 2 2].[string range $Body 3 15]
-		entry	"TI-Float $index" "$Sign$Body\e$Power" 10 [expr [pos]-10]
-		if {!$recursed && ($bitbyte & 1)} {
-			internalNumber "$index\c" 1
+		sectionvalue $n
+		endsection
+		if {!$recursed && ($type == 0x01)} {
+			set n "$n + [internalNumber 1]i"
 		}
+		sectionvalue $n
+		return $n
 	}
-	internalNumber $index 0
+	internalNumber 0
+	endsection
 }
 
 proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
-	proc readTIFloat {{index ""} {recursed 0}} {
-		set	bitbyte [uint8]
-		set	type [expr $bitbyte & 63]
-		if {$type in {28 29}} {
-			move	-1
-			readTIRadical $index $recursed
-			return
+	section -collapsed Number\ $index
+
+	proc readTIFloat {recursed} {
+		section -collapsed [expr $recursed?"Complex":"Real"]
+		section -collapsed "Flags" {
+			set	Flags [hex 1]
+			set	type [format "0x%02X" [expr $Flags & 63]]
+			sectionvalue $Flags\ ([entryd "Type" $type 1 $::Z80typeDict])
+			FlagRead $Flags 7 Negative\ Float Positive\ Float
 		}
-		set	Name TI-F[expr $type>15?"raction":"loat"]
-		set	Name $Name[expr $type>29?"Pi":""]
-		set	Name [expr $type==14?"Undefined":"$Name"]
-		set	Sign [expr $bitbyte & 128?"-":"+"]
-		set	Power [expr [uint8]-128]
-		set	Body [hex 7]
-		set	Body [string index $Body 2].[string range $Body 3 15]
-		entry	"$Name $index" "$Sign$Body\e$Power" 9 [expr [pos]-9]
-		if {!$recursed && $type in {12 27 30 31}} {
-			readTIFloat "$index\c" 1
+		if {$type in {0x1C 0x1D}} {
+			set	Body [hex 8 Body]
+			set	Signs [string index $Body 2]
+			set	N5 [string range $Body 3 5]
+			set	N3 [expr $Signs & 2?"-":"+"][string range $Body 6 8]
+			set	N1 [expr $Signs & 1?"-":""][string range $Body 9 11]
+			set	N4 [string range $Body 12 14]
+			set	N2 [string range $Body 15 17]
+			set	n "($N1√$N2$N3√$N4)/$N5"
+		} else {
+			set	Sign [expr $Flags & 128?"-":""]
+			set	Exp [expr [uint8]-128]
+			entry	Exponent $Exp 1 [expr [pos]-1]
+			set	Body [hex 7]
+			set	Body [string index $Body 2].[string range $Body 3 15]
+			entry	Mantissa $Body 7 [expr [pos]-7]
+			set	n "$Sign[format "%.14g" $Body][expr $type>29?"π":""][expr $Exp?"\e$Exp":""][expr $type==14?" (Undefined)":""]"
 		}
+		sectionvalue $n
+		endsection
+		if {!$recursed && $type in {0x0C 0x1B 0x1D 0x1E 0x1F}} {
+			set n "$n + [readTIFloat 1]i"
+		}
+		sectionvalue $n
+		return $n
 	}
 
-	proc readTIRadical {{index ""} {recursed 0}} {
-		set	type [uint8]
-		set	Body [hex 8]
-		set	Signs [string range $Body 2 2]
-		set	N5 [string range $Body 3 5]
-		set	N3 [expr $Signs & 2?"-":"+"][string range $Body 6 8]
-		set	N1 [expr $Signs & 1?"-":""][string range $Body 9 11]
-		set	N4 [string range $Body 12 14]
-		set	N2 [string range $Body 15 17]
-		entry	"TI-Radical $index" "($N1√$N2$N3√$N4)/$N5" 9 [expr [pos]-9]
-		if {!$recursed && $type == 29} {
-			readTIRadical "$index\c" 1
-		}
-	}
-	set a [uint8]
+	set a [hex 1]
 	move -1
 	if ![hex 9] {
-		entry TI-Float\ $index DNE 9 [expr [pos]-9]
+		entry Real DNE 9 [expr [pos]-9]
+		sectionvalue DNE
 	} elseif {($a&0x7F) in {20 21 22 23 24} && $magic == "**TI73**"} {
 		move	-8
-		set	Body [hex 8]
-		set	sign [expr $a & 128?"-":"+"]
+		section -collapsed "Flags" {
+			set	type [format "0x%02X" [expr $a & 63]]
+			sectionvalue $a\ ([entryd "Type" $a 1 $::73typeDict])
+			FlagRead $a 7 Negative Positive
+		}
+		set	Body [hex 8 Body]
+		set	sign [expr $a & 128?"-":""]
 		set	den [string range $Body 12 15]
 		switch [expr $a & 127] {
 			20 -
 			22 {
-				set	Name TI-SFrac
-				set	numb "$sign[string range $Body 4 9]/$den"
+				set	n "$sign[string range $Body 4 9]/$den"
 			}
 			21 -
 			23 {
-				set	Name TI-MFrac
-				set	numb "$sign[string range $Body 3 6].[string index $Body 7]_[string range $Body 8 10].[string index $Body 11]/$den"
+				set	n "$sign[string range $Body 3 6].[string index $Body 7]_[string range $Body 8 10].[string index $Body 11]/$den"
 			}
 			24 {
+				sectionname Category\ $index
 				move	-7
-				set	Name Category
-				set	numb [ascii 7]
+				set	n [ascii 7]
 			}
 		}
-		entry	"$Name $index" $numb 9 [expr [pos]-9]
+		sectionvalue $n
 	} else {
 		move	-9
-		readTIFloat $index 0
+		readTIFloat 0
 	}
+	endsection
 }
 
 proc readGDB {} {
@@ -634,6 +660,13 @@ proc 68KreadBody {datatype {defaultLen 0}} {
 				}
 			}
 			hex	1 "TEXT_TAG (E0)"
+		}
+		0x1C {
+			ReadAppVar $defaultLen
+		#	set	st [pos]
+		#	move	1
+		#	entry	OTH_TAG [cstr ascii] $st [expr [pos]-$st]
+		#	hex	1 "TEXT_TAG (E0)"
 		}
 		default { bytes $defaultLen Data }
 	}
@@ -959,7 +992,13 @@ proc SysTab {size magic} {
 		} else {
 			set	length 3
 		}
+		if {$type in {0x01 0x0D}} {
+			incr length -1
+		}
 		set	name [getNameZ80 "Name data" $type $length]
+		if {$type in {0x01 0x0D}} {
+			hex 1 Formula\ Index
+		}
 		sectionvalue $name
 	}
 	endsection

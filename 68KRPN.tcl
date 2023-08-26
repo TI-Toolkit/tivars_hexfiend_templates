@@ -1,3 +1,6 @@
+# TI 68K RPN parser HexFiend template include
+# Version 1.0
+# (c) 2021-2023 LogicalJoe
 # .hidden = true;
 
 proc 68KRPN {size} {

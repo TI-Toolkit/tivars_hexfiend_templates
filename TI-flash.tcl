@@ -1,4 +1,4 @@
-# TI graphing calculator flash format HexFiend template
+# TI graphing calculator flash file parser HexFiend template
 # Version 1.0
 # (c) 2021-2023 LogicalJoe
 # .hidden = true;
@@ -15,7 +15,7 @@ proc uint24l {a {b -1}} {
 proc Field_Names {value} {
 	# 024 CE OSs
 	# 035 cert (030000)
-	# 0C1 exam mode something
+	# 0C1
 	# 80D
 	# 80E CE OS
 	return [switch -- $value {

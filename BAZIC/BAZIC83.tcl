@@ -1,5 +1,5 @@
-# Z80 TI-BASIC Detokenizer HexFiend template include
-# Version 1.0
+# TI-83/84 TI-BASIC Detokenizer HexFiend template include
+# Version 2.0
 # (c) 2021-2023 LogicalJoe
 # .hidden = true;
 
@@ -702,7 +702,6 @@ set	BAZIC_BB [dict create \
 	0xCD "Í" \
 	0xCE "GarbageCollect" \
 	0xCF "|~" \
-	0xD0 "'" \
 	0xD1 "@" \
 	0xD2 "#" \
 	0xD3 "$" \
