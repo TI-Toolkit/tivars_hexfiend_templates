@@ -186,9 +186,9 @@ set	BAZIC_00 [dict create \
 	0xBC "sqrt(" \
 	0xBD "cuberoot(" \
 	0xBE "ln(" \
-	0xBF "e^(" \
+	0xBF "e^^(" \
 	0xC0 "log(" \
-	0xC1 "10^(" \
+	0xC1 "10^^(" \
 	0xC2 "sin(" \
 	0xC3 "sin^-1(" \
 	0xC4 "cos(" \

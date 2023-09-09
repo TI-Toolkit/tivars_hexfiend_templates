@@ -347,7 +347,10 @@ proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 			set	Body [hex 7]
 			set	Body [string index $Body 2].[string range $Body 3 15]
 			entry	Mantissa $Body 7 [expr [pos]-7]
-			set	n "$Sign[format "%.14g" $Body][expr $type>29?"π":""][expr $Exp?"\e$Exp":""][expr $type==14?" (Undefined)":""]"
+			if ![regexp {[A-F]} $Body] {
+				set Body [format "%.14g" $Body]
+			}
+			set	n "$Sign$Body[expr $type>29?"π":""][expr $Exp?"\e$Exp":""][expr $type==14?" (Undefined)":""]"
 		}
 		sectionvalue $n
 		endsection
@@ -662,8 +665,10 @@ proc 68KreadBody {datatype {defaultLen 0}} {
 			hex	1 "TEXT_TAG (E0)"
 		}
 		0x1C {
+			# hack until magic is passed to appvar handler
+			set	st [pos]
 			ReadAppVar $defaultLen
-		#	set	st [pos]
+			goto	[expr $st+$defaultLen]
 		#	move	1
 		#	entry	OTH_TAG [cstr ascii] $st [expr [pos]-$st]
 		#	hex	1 "TEXT_TAG (E0)"
@@ -985,10 +990,8 @@ proc SysTab {size magic} {
 	# always(?) zero in groups
 	hex	1 "Page"
 	section -collapsed "Name" {
-		set	length [uint8]
-		move	-1
-		if {$length < 9 && $length} {
-			uint8	"Name length"
+		if {$type in {0x01 0x05 0x06 0x0D 0x15 0x17}} {
+			set	length [uint8 "Name length"]
 		} else {
 			set	length 3
 		}
@@ -997,7 +1000,7 @@ proc SysTab {size magic} {
 		}
 		set	name [getNameZ80 "Name data" $type $length]
 		if {$type in {0x01 0x0D}} {
-			hex 1 Formula\ Index
+			hex 1 Formula\ index
 		}
 		sectionvalue $name
 	}

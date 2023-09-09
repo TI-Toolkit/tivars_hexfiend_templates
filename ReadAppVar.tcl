@@ -243,7 +243,7 @@ proc ReadAppVar {datasize} {
 			FlagRead $flags 5 "5 Box mode"
 			foreach a {6 7} { FlagRead $flags $a }
 		}
-		bytes	9 "Unused/Unknown"
+		ascii	9 "Current AppVar"
 	} elseif {$head == "\xf3\x47\xbf\xaa" || $head == "\xf3\x47\xbf\xab"} {
 		section -collapsed "Data"
 		hex	4 CelSheet
