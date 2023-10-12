@@ -179,10 +179,10 @@ set	82typeDict [dict create \
 
 set	73typeDict [dict create \
 	0x0D "Categorical list" \
-	0x14 "RSFraction" \
-	0x15 "RMFraction" \
-	0x16 "USFraction" \
-	0x17 "UMFraction" \
+	0x14 "Reduced simple fraction" \
+	0x15 "Reduced mixed fraction" \
+	0x16 "Simple fraction" \
+	0x17 "Mixed fraction" \
 	0x18 "Category" \
 	0x1A "AppVar" \
 	0x1B "Temporary" \
@@ -255,7 +255,8 @@ proc ReadVer {} {
 	set	Vers [dict create \
 		0x01 $s 0x02 "$s 1.15+" 0x03 "$s 1.16+" \
 		0x04 $t 0x05 "$t 2.30+" 0x06 "$t 2.53MP+" 0x07 "$t 2.55MP+" \
-		0x0A "$t CSE+" 0x0B "$t CE 5.0-5.2+" 0x0C "$t CE 5.3+"]
+		0x0A "$t CSE+" 0x0B "$t CE 5.0-5.2+" 0x0C "$t CE 5.3+" \
+		0x10 Exact 0x11 Python]
 	section -collapsed Version {
 		set	v [format 0x%02X [expr [set F [hex 1]]&223]]
 		set	r [entryd Version $v 1 $Vers]

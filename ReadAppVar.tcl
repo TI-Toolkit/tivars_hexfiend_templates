@@ -61,7 +61,7 @@ proc ReadAppVar {datasize} {
 		move	-4
 	}
 
-	if {$head == "PYCD" || $head == "PYSC"} {
+	if {$head in {"PYCD" "PYSC"}} {
 		section	-collapsed "Data"
 
 		ascii	4 "Python"
@@ -89,6 +89,36 @@ proc ReadAppVar {datasize} {
 		readByLine $length
 		incr	datasize [expr $offset-[pos]]
 		bytes	$datasize "Compiled module"
+		endsection
+	} elseif {$head == "IM8C"} {
+		#https://github.com/TI-Planet/img2calc/blob/master/index.html#L1127-L1187
+		section	-collapsed "Data"
+		set	start [pos]
+		ascii	4 "Python image"
+		entry	Width [expr [uint8]+256*[uint8]+256*256*[uint8]] 3 [expr [pos]-3]
+		entry	Height [expr [uint8]+256*[uint8]+256*256*[uint8]] 3 [expr [pos]-3]
+		section Palette {
+			hex	1 0x01
+			# bool
+			uint8	has\ alpha
+			# 0-indexed
+			uint8	transparent\ index
+			# 565 colors
+			set colors [uint8]
+			if !$colors {
+				set colors 256
+			}
+			entry	Palette\ entries $colors 1 [expr [pos]-1]
+			section -collapsed Indices {
+				set index 0
+				while {$colors > 0} {
+					uint16l Entry\ $index
+					incr colors -1
+					incr index
+				}
+			}
+		}
+		bytes	[expr $start+$datasize-[pos]] "RLE image data"
 		endsection
 	} elseif {$head == "\xf3\x47\xbf\xa7"} {
 		#Credit to Zeroko
