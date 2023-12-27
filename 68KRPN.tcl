@@ -1,11 +1,11 @@
 # TI 68K RPN parser HexFiend template include
-# Version 1.0
+# Version 1.1
 # (c) 2021-2023 LogicalJoe
 # .hidden = true;
 
 proc 68KRPN {size} {
 
-proc Recursive_RPN {{expression ""}} {
+proc Recursive_RPN {{expression ""} {start 0}} {
 
 set 68KRPN_TAGS [dict create \
 	0x00 VAR_NAME \
@@ -255,15 +255,16 @@ set 68KRPN_TAGS [dict create \
 	set	tag_name [entryd TAG $tag_type 1 $68KRPN_TAGS]
 	move	-2
 	switch $tag_name {
-		EXT_SYSTEM {
+		EXT_SYSTEM { #1C
 			hex	1 "Sys token"
 			move	-2
 		}
 		ADD -
-		POW -
+		SUB -
 		MUL -
 		DIV -
-		MINUS {
+		POW {
+			# Two arguments
 			set expression $tag_name$expression
 			section $tag_name
 			set expression [Recursive_RPN $expression]
@@ -273,7 +274,9 @@ set 68KRPN_TAGS [dict create \
 		COS -
 		SIN -
 		SQRT -
-		LOCALVAR {
+		LOCALVAR -
+		MINUS {
+			# one argument
 			set expression $tag_name$expression
 			section $tag_name
 			set expression [Recursive_RPN $expression]
@@ -281,6 +284,7 @@ set 68KRPN_TAGS [dict create \
 		}
 		NEGINT -
 		POSINT {
+			# integer
 			section $tag_name
 			set	num_bytes [hex 1 S_$tag_name]
 			move	-$num_bytes
@@ -297,6 +301,7 @@ set 68KRPN_TAGS [dict create \
 		MAX -
 		MIN -
 		LIST {
+			# list ending with END
 			section $tag_name
 			while {[hex 1] != 0xE5} {
 				move -1
@@ -306,7 +311,9 @@ set 68KRPN_TAGS [dict create \
 			set expression [Recursive_RPN $expression]
 			endsection
 		}
-		STR {
+		STR -
+		VAR_NAME {
+			# \0 name \0
 			section $tag_name
 			move	-1
 			while {[int8]} {move -2}
@@ -324,18 +331,60 @@ set 68KRPN_TAGS [dict create \
 		FUNC {
 			section $tag_name
 			hex	1 Flags
+			# 0x40 for tokenized, 0x08 for untokenized
 			# assume tokenized for now
 			move	-3
 			hex	2 NULLs
-			set	s [pos]
-			while {[uint8] != 229} {move -2}
-			set	t [pos]
+			move -3
+
+			# loop to ENDSTACK TAG
+			while {[hex 1] != 0xE9} {
+				move	-1
+				set expression [Recursive_RPN $expression]
+			}
 			move	-1
-			hex	[expr $s-$t-1] Arguments
-			goto 	$t
-			move	-2
 			set expression [Recursive_RPN $expression]
+
+			# this is present in fargo programs
+			if {[pos] > $start} {
+				move 1
+				set t [expr [pos]-$start]
+				goto $start
+				bytes $t "Excess data"
+			}
 			endsection
+		}
+		STORE {
+			# variable then expression (could be "Two arguments")
+			section $tag_name {
+				section "variable" {
+					set expression [Recursive_RPN $expression]
+				}
+				section "expression" {
+					set expression [Recursive_RPN $expression]
+				}
+			}
+		}
+		EXTR_INSTR {
+			# BASIC ITAG
+			set ITAG [hex 1 "BASIC ITAG"]
+			move -2
+
+			if {$ITAG in {0x7B 0x7D}} {
+				section "ITAG $ITAG"
+				# loop to END TAG
+				while {[hex 1] != 0xE5} {
+					move	-1
+					set expression [Recursive_RPN $expression]
+				}
+				move	-1
+				set expression [Recursive_RPN $expression]
+				endsection
+			}
+		}
+		NEWLINE {
+			uint8 indentation
+			move -2
 		}
 		SIGMA_SUM {
 			section $tag_name
@@ -353,8 +402,8 @@ set 68KRPN_TAGS [dict create \
 	set	start [pos]
 	move	$size
 	move	-1
-	while {[pos] >= $start} {
-		entry RPN: [Recursive_RPN]
-	}
+#	while {[pos] >= $start} {
+		entry RPN: [Recursive_RPN "" $start]
+#	}
 	goto	[expr $start+$size]
 }
