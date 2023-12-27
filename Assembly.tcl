@@ -22,7 +22,7 @@ if {$assembly == 0xBB6D} { # mono Z80
 		if {$b2 in {1 3}} {
 			hex	1 "MirageOS"
 			hex	1 "Type"
-			bytes	30 "Button"
+			bytes	30 "15x15 Button"
 			if {$b2 == 3} {
 				uint16	-hex "Quit address"
 			}
@@ -37,6 +37,18 @@ if {$assembly == 0xBB6D} { # mono Z80
 			hex	1 "ION"
 			hex	2 "jr nc"
 			cstr	ascii "Description"
+		} elseif {$b2 == 84} {
+			# https://www.ticalc.org/cgi-bin/zipview?83plus/asm/shells/tsekrnl.zip;tsedev.txt
+			move	1
+			if {[uint32] == 21320532} {
+				move	-5
+				hex	1 "RET for TI-OS"
+				bytes	4 "TSE header"
+				cstr	ascii "Program title"
+				uint16	"External data required"
+			} else {
+				move	-5
+			}
 		}
 	} elseif {$b1==175} {
 		set	b2 [uint8]

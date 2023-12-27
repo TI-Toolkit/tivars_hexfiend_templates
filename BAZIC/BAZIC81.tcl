@@ -4,6 +4,8 @@
 # .hidden = true;
 
 proc BAZIC81_GetToken {term} {
+# 07 and 56 are the "true" `Prgm` and ` `
+# tokens 00-06,08-0F,A2,E5-EB,ED-FF not normally accessable
 set	BAZIC_00 [dict create \
 	0x07 "Prgm" \
 	0x08 "Box" \
@@ -56,7 +58,7 @@ set	BAZIC_00 [dict create \
 	0x37 "10^" \
 	0x38 "sin " \
 	0x39 "asin " \
-	0x3A "cos" \
+	0x3A "cos " \
 	0x3B "acos " \
 	0x3C "tan " \
 	0x3D "atan " \
@@ -197,7 +199,7 @@ set	BAZIC_00 [dict create \
 	0xC4 "Y4" \
 	0xC5 "X1T" \
 	0xC6 "Y1T" \
-	0xC7 "X2Y" \
+	0xC7 "X2T" \
 	0xC8 "Y2T" \
 	0xC9 "X3T" \
 	0xCA "Y3T" \
@@ -220,11 +222,11 @@ set	BAZIC_00 [dict create \
 	0xDB "Line(" \
 	0xDC "PT-On(" \
 	0xDD "PT-Off(" \
-	0xDE "Pt-Chg(" \
+	0xDE "PT-Chg(" \
 	0xDF "DrawF " \
 	0xE0 "Shade(" \
 	0xE1 "ClrDraw" \
-	0xE2 "Clrhome" \
+	0xE2 "ClrHome" \
 	0xE3 "DispHome" \
 	0xE4 "DispGraph" \
 	0xE5 "Reset" \

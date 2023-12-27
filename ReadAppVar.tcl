@@ -79,7 +79,7 @@ proc ReadAppVar {datasize} {
 	} elseif {$head == "PYMP"} {
 		#https://github.com/commandblockguy/tipycomp/blob/main/format.txt
 		section	-collapsed "Data"
-		ascii	4 "Python Module"
+		ascii	4 "Python module"
 		incr	datasize -4
 		set	length [reverse_leb128 "Length"]
 		hex	1 "Verison?"

@@ -4,6 +4,7 @@ Template set by LogicalJoe
 
 `TI.tcl` is the main template; it includes all avaliable files as needed.
 The `BAZIC/` directory contains files relating to TI-BASIC detokenization.
+`TI ROM checksum.tcl` contains algorithms used to verify each of TI's ROMs.
 
 These templates are primarily designed for TI-Z80 calculators:
 Files with extensions `.(8[23x56]|73)*` are generally assumed to work.
