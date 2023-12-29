@@ -1,5 +1,5 @@
 # TI graphing calculator flash file parser HexFiend template
-# Version 1.0
+# Version 1.2
 # (c) 2021-2023 LogicalJoe
 # .hidden = true;
 
@@ -145,9 +145,16 @@ section	"File packaging" {
 	hex	4 "Date"
 	entry	"Name" "[uint8],[ascii 8]" 9 [expr [pos]-9]
 	bytes	23 Unused
-	entryd	"Owner Calc ID" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
-	entryd	"Type" [hex 1] 1 $Z80typeDict
-	bytes	23 Unused
+	set	a 0
+	set	b [pos]
+	while {[uint8] != 0} {
+		move	-1
+		incr	a
+		entryd	"Owner Calc ID $a" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
+		entryd	"Type $a" [set vartype [hex 1]] 1 $Z80typeDict
+	}
+	goto	$b
+	move	25
 	entryd	"Owner Prod ID" [hex 1] 1 $ProdIDs
 	set	datasize [uint32]
 	entry	"Data size" $datasize 4 [expr [pos]-4]
@@ -220,10 +227,13 @@ proc getsection {} {
 
 
 section	"Data" {
-	if {$binary} {
+	set	start [pos]
+	if {$vartype == 0x3E} { # License
+		ascii	$datasize "Data"
+	} elseif {$binary} {
 		set	r [uint8]
 		move	-1
-		while {[pos]<(78+$datasize) && $r==58} {
+		while {$start+$datasize>[pos] && $r==58} {
 			readTIHex
 
 # line endings can be 0A or 0D0A, each followed by a 3A
@@ -247,9 +257,18 @@ section	"Data" {
 			ascii	[expr 78+$datasize-[pos]] "Extended data"
 		}
 	} else {
-		while {[pos]<(78+$datasize)} {
+		while {$start+$datasize>[pos]} {
 			getsection
 		}
+	}
+}
+
+#read multiple FLASH headers, only one basecode/application allowed per physical file
+if {[len]-[pos] > 78} {
+	if {[ascii 8]=="**TIFL**"} {
+		move -8
+		ascii 8 Magic
+		source [info script]
 	}
 }
 
