@@ -6,7 +6,7 @@
 if [catch {
 proc uint24l {a {b -1}} {
 	if {$b==-1} {
-		entry	$a [format "0x%06X" [set x [uint24]]] 3 [expr [pos]-3]
+		entry	$a [format "0x%06X" [uint24]] 3 [expr [pos]-3]
 	} else {
 		entry	$a [format "0x%06X" $b] 3 [expr [pos]-3]
 	}
@@ -161,36 +161,62 @@ section	"File packaging" {
 }
 
 proc readExtendedFormat {fieldSize} {
+	set	start [pos]
 	set	r [ascii 3]
 	move	-3
 	if {$r=="eZ8"} { # eZ80
-		section	-collapsed "Additional structure" {
+		section -collapsed "Data"
+		section "Additional structure" {
 			ascii	3 "eZ8"
 			ascii	9 "Name"
 			hex	1 "Flag1"
 			hex	1 "Unknown"
 			hex	1 "Flag2"
 			uint24l	"Unknown"
-			set	Main [uint24]
-			uint24l	"Main" $Main
+			uint24l	"Main" [set main [uint24]]
 			uint24l	"Initialized location"
 			uint24l	"Initialized size"
 			uint24l	"Entry"
 			uint24l	"Language"
 			uint24l	"ExecLib"
-			uint24l	"Copyright"
+			set	copy [uint24]
+			set	a [pos]
+			goto	[expr $start + $copy]
+			set	copys [cstr ascii]
+			goto	$a
+			entry	Copyright [format "0x%06X $copys" $copy] 3 [expr [pos]-3]
 			uint24l	"Reserved"
 		}
-
 		section	-collapsed "Relocation table" {
-			for {set a 7} {6*$a < $Main} {incr a} {
+			while {$main - [pos] + $start} {
 				uint24l	"Hole"
 				set	address [uint24]
 				uint24l	[expr $address >> 22?"Data Base":"Code Base"] [expr $address & 4194303]
 			}
 		}
-		hex	[expr $fieldSize-$Main] "Body"
+		bytes	[expr $fieldSize-$main] "Body"
+		endsection
+	} elseif {[uint32] == 0x3D537B16} {
+		section -collapsed "Data"
+		move	-4
+		section "Additional structure" {
+			hex	4 "68k"
+			ascii	9 "Name"
+			bytes	25 "Reserved"
+			big_endian
+			hex	4 Unknown
+			set	main [hex 4 Main?]
+			hex	4 Entry?
+			hex	4 Unknown
+			hex	4 Reserved
+			little_endian
+		}
+		bytes	[expr $main - [pos] + $start] "Relocation table"
+		# there seems to be more formatted data but is inconsistent
+		bytes	[expr $fieldSize - [pos] + $start] "Body"
+		endsection
 	} else {
+		move	-4
 		hex	$fieldSize "Data"
 	}
 }
