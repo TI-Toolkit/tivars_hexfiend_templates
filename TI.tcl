@@ -2,17 +2,21 @@
 # Version 2.0
 # (c) 2021-2023 LogicalJoe
 # .types = (
-# .73g, 73i, 73l, 73n, 73p, 73s, 73t, 73v, 73w, 73y, 73z,
+# .73e, 73d, 73g, 73i, 73l, 73m, 73n, 73p, 73s, 73t, 73v, 73w, 73y, 73z,
 # .82b, 82d, 82g, 82i, 82l, 82m, 82n, 82p, 82s, 82t, 82w, 82y, 82z,
 # .83b, 83c, 83d, 83g, 83i, 83l, 83m, 83n, 83p, 83s, 83t, 83w, 83y, 83z,
-# .8xb, 8xc, 8xd, 8xg, 8xi, 8xl, 8xm, 8xn, 8xo, 8xp, 8xs, 8xt, 8xv, 8xw, 8xy, 8xz,
-# .85b, 85c, 85d, 85g, 85i, 85k, 85l, 85m, 85n, 85p, 85s, 85v, 85w,
-# .86b, 86c, 86d, 86g, 86i, 86k, 86l, 86m, 86n, 86p, 86s, 86v, 86w,
+# .8xb, 8xc, 8xd, 8xe, 8xg, 8xi, 8xl, 8xm, 8xn, 8xo, 8xp, 8xs, 8xt, 8xv, 8xw, 8xy, 8xz,
+# .85b, 85c, 85d, 85g, 85i, 85k, 85l, 85m, 85n, 85p, 85r, 85s, 85t, 85v, 85w, 85y, 85z,
+# .86b, 86c, 86d, 86g, 86i, 86k, 86l, 86m, 86n, 86p, 86r, 86s, 86t, 86v, 86w, 86y, 86z,
+# .89a, 89c, 89d, 89e, 89f, 89i, 89l, 89m, 89p, 89r, 89s, 89t, 89x, 89y, 89z,
+# .92a, 92b, 92c, 92d, 92e, 92f, 92g, 92i, 92l, 92m, 92p, 92r, 92s, 92t, 92x, 92y,
+# .9xa, 9xc, 9xd, 9xe, 9xq, 9xf, 9xg, 9xi, 9xl, 9xm, 9xp, 9xr, 9xs, 9xt, 9xx, 9xy,
+# .v2a, v2c, v2d, v2e, v2f, v2g, v2i, v2l, v2m, v2p, v2q, v2r, v2s, v2t, v2x, v2y, v2z,
 # .8cq, 8xq,
 # .73k, 8xk, 8ck, 8ek,
-# .73u, 82u, 8cu, 8eu, 8pu, 8xu, 8yu,
-# .b83, b84, tig,
-# .8cb, 8cg, 8ci, 8xidl);
+# .73u, 82u, 89u, 8cu, 8eu, 8pu, 8xu, 8yu, 9xu, v2u,
+# .b83, b84, tig, tib,
+# .8ca, 8cb, 8cg, 8ci, 8xidl);
 
 set CurDir [file dirname [file normalize [info script]]]
 
@@ -1044,11 +1048,14 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 		section "Meta" {
 			sectionvalue "16 bytes"
 			set	bodyOffset [uint32 "Offset to data"]
-			set	name [ascii 8 Name]
+			move	8
 			set	datatype [hex 1]
-			set	typeName [entryd "Type" $datatype 1 $68KtypeDict]
-			# are these flags?
-			entryd	Attribute [hex 1] 1 [dict create 0x01 Locked 0x02 Archived]
+			move	-9
+			set	name [ascii 8 [expr $datatype==0x1D?"Rom version":"Name"]]
+			set	typeName [entryd "Type" [hex 1] 1 $68KtypeDict]
+			# are these flags?  Note that backup attributes are only used by TiLP in 89 "backups"
+			# https://github.com/debrouxl/tilibs/blob/master/libtifiles/trunk/src/tifiles.h#L69-L72
+			entryd	Attribute [hex 1] 1 [dict create 0x01 Locked 0x02 Protected 0x03 Archived 0x1D "Backup none" 0x26 "Backup Locked" 0x27 "Backup Archived"]
 			uint16	"Items in dir"
 		}
 		sectionname $typeName\ entry
@@ -1056,12 +1063,16 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 		goto	$bodyOffset
 		section "Body" {
 			set	loopStart [pos]
-			hex	4 NULLs
-			big_endian
-			set	Size [uint16 Data\ length]
-			little_endian
-			68KreadBody $datatype $Size
-			sectionvalue [expr $Size+8]\ bytes
+			if {$datatype == 0x1D} {
+				bytes	39266 Data
+			} else {
+				hex	4 NULLs
+				big_endian
+				set	Size [uint16 Data\ length]
+				little_endian
+				68KreadBody $datatype $Size
+				sectionvalue [expr $Size+8]\ bytes
+			}
 			CheckSum $loopStart [pos]
 		}
 		sectionvalue "$name"
