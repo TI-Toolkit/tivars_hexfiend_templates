@@ -11,6 +11,8 @@ proc ReadAsm {assembly datalen} {
 
 set	posset [expr [pos]]
 
+# TODO: assembly not enough $datalen
+
 if {$assembly == 0xBB6D} { # mono Z80
 	hex	2 "Z80 token"
 	set	b1 [uint8]
@@ -82,26 +84,28 @@ if {$assembly == 0xBB6D} { # mono Z80
 	bytes	[expr $datalen+$posset-[pos]] "Assembly"
 } elseif {$assembly == 0xEF7B} { # CE eZ80
 	hex	2 "eZ80"
-	set	eZtype [uint8]
-	move	-1
-	if !$eZtype {
-		hex	1 "C"
-	} elseif {$eZtype == 127} {
-		hex	1 "ICE"
-	}
-	set	jp [uint8]
-	move	3
-	set	b2 [uint8]
-	move	-5
-	if {$jp == 195 && $b2 in {1 2}} {
-		hex	4 "jp"
-		hex	1 "Type"
-		if {$b2 == 1} {
-			hex	1 "Width"
-			hex	1 "Height"
-			bytes	256 "Icon"
+	if {$datalen > 3} {
+		set	eZtype [uint8]
+		move	-1
+		if !$eZtype {
+			hex	1 "C"
+		} elseif {$eZtype == 127} {
+			hex	1 "ICE"
 		}
-		cstr	ascii "Description"
+		set	jp [uint8]
+		move	3
+		set	b2 [uint8]
+		move	-5
+		if {$jp == 195 && $b2 in {1 2}} {
+			hex	4 "jp"
+			hex	1 "Type"
+			if {$b2 == 1} {
+				hex	1 "Width"
+				hex	1 "Height"
+				bytes	256 "Icon"
+			}
+			cstr	ascii "Description"
+		}
 	}
 	bytes	[expr $datalen+$posset-[pos]] "Assembly"
 } elseif {$assembly == 0xD900} { # `Stop/nop`

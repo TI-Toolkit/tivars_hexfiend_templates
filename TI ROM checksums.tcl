@@ -18,5 +18,5 @@ entry "TI-81 hash 1.5K-:" [format %04X $hl]
 entry "TI-81 hash 1.6K+:" [format %04X [expr 65535&-$hl2]]
 entry "TI-81 hash curnt:" [format %04X [uint16]] 2 [expr [len]-2]
 move -2
-entry "checksum:" [format %02X [expr 255&($hl2+[uint8]+[uint8])]]
+entry "Z80 checksum:" [format %02X [expr 255&($hl2+[uint8]+[uint8])]]
 # TI-82 19.006 doubles the checksum so valid ROMs return 0x80

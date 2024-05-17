@@ -18,7 +18,7 @@
 # .b83, b84, tig, tib,
 # .8ca, 8cb, 8cg, 8ci, 8xidl);
 
-set CurDir [file dirname [file normalize [info script]]]
+variable CurDir [file dirname [file normalize [info script]]]
 
 if {[info command hf_min_version_required] ne ""} {
 	hf_min_version_required 2.17
@@ -131,7 +131,7 @@ set	ProdIDs [dict create \
 	0x1B "TI-84 Plus T" \
 ]
 
-set	Z80typeDict [dict create \
+variable Z80typeDict [dict create \
 	0x00 "Real" \
 	0x01 "Real list" \
 	0x02 "Matrix" \
@@ -181,7 +181,7 @@ set	82typeDict [dict create \
 	0x1F "Group" \
 ]
 
-set	73typeDict [dict create \
+variable 73typeDict [dict create \
 	0x0D "Categorical list" \
 	0x14 "Reduced simple fraction" \
 	0x15 "Reduced mixed fraction" \
@@ -193,7 +193,7 @@ set	73typeDict [dict create \
 ]
 
 # 0x14 is `New Equation` on TI-86
-set	85typeDict [dict create \
+variable 85typeDict [dict create \
 	0x00 "Real" \
 	0x01 "Complex" \
 	0x02 "Real vector" \
@@ -285,6 +285,7 @@ proc ReadAxes {is86} {
 }
 
 proc read85Numb {{index ""}} {
+	variable 85typeDict
 	section -collapsed Number\ $index
 	proc internalNumber {recursed} {
 		section -collapsed [expr $recursed?"Complex":"Real"]
@@ -295,7 +296,7 @@ proc read85Numb {{index ""}} {
 			if {$Flags == 255} {
 				sectionvalue $Flags\ (Undefined)
 			} else {
-				sectionvalue $Flags\ ([entryd "Type" $type 1 $::85typeDict])
+				sectionvalue $Flags\ ([entryd "Type" $type 1 $85typeDict])
 				FlagRead $Flags 7 Negative\ Float Positive\ Float
 			}
 		}
@@ -326,14 +327,16 @@ proc read85Numb {{index ""}} {
 }
 
 proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
+	variable 73typeDict
 	section -collapsed Number\ $index
 
 	proc readTIFloat {recursed} {
+		variable Z80typeDict
 		section -collapsed [expr $recursed?"Complex":"Real"]
 		section -collapsed "Flags" {
 			set	Flags [hex 1]
 			set	type [format "0x%02X" [expr $Flags & 63]]
-			sectionvalue $Flags\ ([entryd "Type" $type 1 $::Z80typeDict])
+			sectionvalue $Flags\ ([entryd "Type" $type 1 $Z80typeDict])
 			FlagRead $Flags 7 Negative\ Float Positive\ Float
 		}
 		if {$type in {0x1C 0x1D}} {
@@ -375,7 +378,7 @@ proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 		move	-8
 		section -collapsed "Flags" {
 			set	type [format "0x%02X" [expr $a & 63]]
-			sectionvalue $a\ ([entryd "Type" $a 1 $::73typeDict])
+			sectionvalue $a\ ([entryd "Type" $a 1 $73typeDict])
 			FlagRead $a 7 Negative Positive
 		}
 		set	Body [hex 8 Body]
@@ -405,6 +408,7 @@ proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 }
 
 proc readGDB {} {
+	variable Z80typeDict
 	set	datalen [len_field]
 	set	start [pos]
 	set	isn82 ![uint8]
@@ -487,7 +491,7 @@ proc readGDB {} {
 			section -collapsed "Flags" {
 				set	Flags [hex 1]
 				sectionvalue "$Flags - [expr $Flags & 32?"S":"Uns"]elected"
-				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $::Z80typeDict
+				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $Z80typeDict
 				FlagRead $Flags 5 Selected Unselected
 				FlagRead $Flags 6 "Was used for graph"
 				FlagRead $Flags 7 "Link transfer flag"
@@ -902,6 +906,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 }
 
 proc getNameZ80 {title type length {magic ""}} {
+	variable CurDir
 	set	start [pos]
 	set bint BAZIC83
 	if {$magic == "**TI73**"} {
@@ -915,7 +920,7 @@ proc getNameZ80 {title type length {magic ""}} {
 			incr type 4
 		}
 	}
-	if {[file exists [file join $::CurDir BAZIC $bint.tcl]]} {
+	if {[file exists [file join $CurDir BAZIC $bint.tcl]]} {
 		switch -- $type {
 			0x01 -
 			0x0D {
@@ -963,6 +968,7 @@ proc getNameZ80 {title type length {magic ""}} {
 }
 
 proc SysTab {size magic} {
+	variable Z80typeDict
 	set	EntryStart [pos]
 	section Entry
 
@@ -972,7 +978,7 @@ proc SysTab {size magic} {
 		set	Flags [hex 1]
 		# legacy Z80 equations use bit 5 for selection
 		set	type [format "0x%02X" [expr $Flags & (($Flags & 23) == 3?31:63)]]
-		set	typename [entryd "Type" $type 1 $::Z80typeDict]
+		set	typename [entryd "Type" $type 1 $Z80typeDict]
 		sectionvalue $Flags\ ($typename)
 		if {($Flags & 23) == 3} {
 			FlagRead $Flags 5 "Selected Z80" "Unselected Z80"
@@ -1053,7 +1059,7 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 			move	-9
 			set	name [ascii 8 [expr $datatype==0x1D?"Rom version":"Name"]]
 			set	typeName [entryd "Type" [hex 1] 1 $68KtypeDict]
-			# are these flags?  Note that backup attributes are only used by TiLP in 89 "backups"
+			# Backup attributes are allegedly only used by TiLP in TI-89 "backup groups"
 			# https://github.com/debrouxl/tilibs/blob/master/libtifiles/trunk/src/tifiles.h#L69-L72
 			entryd	Attribute [hex 1] 1 [dict create 0x01 Locked 0x02 Protected 0x03 Archived 0x1D "Backup none" 0x26 "Backup Locked" 0x27 "Backup Archived"]
 			uint16	"Items in dir"
@@ -1170,6 +1176,8 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 	BAZIC81 $size
 	CheckSum 12 [pos]
 } elseif {[string range $magic 0 3]=="PK\x03\x04"} {
+	# Bundles include a _CHECKSUM file with the sum of CRC32 of all files (lowercase, not zero-padded, ends with CRLF)
+	# and a METADATA file with various info
 	move	-8
 	include archives/zip.tcl
 } else {
