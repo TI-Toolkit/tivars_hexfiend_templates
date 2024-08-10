@@ -285,9 +285,9 @@ proc ReadAxes {is86} {
 }
 
 proc read85Numb {{index ""}} {
-	variable 85typeDict
 	section -collapsed Number\ $index
 	proc internalNumber {recursed} {
+		variable 85typeDict
 		section -collapsed [expr $recursed?"Complex":"Real"]
 		section -collapsed "Flags" {
 			set	Flags [hex 1]
@@ -300,11 +300,10 @@ proc read85Numb {{index ""}} {
 				FlagRead $Flags 7 Negative\ Float Positive\ Float
 			}
 		}
-		# means undefined? unclear if exclusive to Diff GDB
+		# all flags set means undefined; unclear if exclusive to Diff GDB
 		if {$Flags == 255} {
-			# looks like a pstr but doesn't make sense
-			hex	1 Unknown
-			set	n "[ascii 8 String]\ (Undefined)"
+			# garbage from OP1(?)
+			set	n [hex 9 Data]\ (Undefined)
 		} else {
 			set	Sign [expr $Flags & 128?"-":""]
 			set	Exp [expr [uint16]-64512]
