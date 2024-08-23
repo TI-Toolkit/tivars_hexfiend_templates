@@ -1,7 +1,8 @@
 # TI-81 TI-BASIC Detokenizer HexFiend template include
 # Version 1.0
-# (c) 2021-2023 LogicalJoe
+# (c) 2021-2024 LogicalJoe
 # .hidden = true;
+
 
 proc BAZIC81_GetToken {term} {
 # 07 and 56 are the "true" `Prgm` and ` `

@@ -1,6 +1,6 @@
 # TI graphing calculator file parser HexFiend template
 # Version 2.0
-# (c) 2021-2023 LogicalJoe
+# (c) 2021-2024 LogicalJoe
 # .types = (
 # .73e, 73d, 73g, 73i, 73l, 73m, 73n, 73p, 73s, 73t, 73v, 73w, 73y, 73z,
 # .82b, 82d, 82g, 82i, 82l, 82m, 82n, 82p, 82s, 82t, 82w, 82y, 82z,
@@ -806,11 +806,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 
 	if { $magic == "**TI73**" } {
 		switch -- $datatype {
-			0x14 - 0x15 - 0x16 - 0x17 {
-				readZ80Numb "" $magic
-				endsection
-				return
-			}
+			0x14 - 0x15 - 0x16 - 0x17 { set datatype 0x00 }
 			0x1A { set datatype 0x15 }
 			0x18 - 0x1B { set datatype 255 }
 		}
@@ -950,8 +946,8 @@ proc getNameZ80 {title type length {magic ""}} {
 				set	name [expr {$name==""?$r($type):"$name ($r($type))"}]
 			}
 			0x1A {
-				# first byte should be 03Ch
-				# should be 0EF50h + [uint8], but no arbitrary detok
+				# first name byte should be 03Ch
+				# then should be 0EF50h + [uint8], but no arbitrary detok
 				int8
 				set	name Image[expr ([uint8]+1)%10]
 			}
@@ -997,7 +993,7 @@ proc SysTab {size magic} {
 	ReadVer
 	# unused garbage in groups
 	entry	"Structure pointer" [format "0x%04X" [uint16]] 2 [expr [pos]-2]
-	# always(?) zero in groups
+	# should be zero in groups to signify RAM
 	hex	1 "Page"
 	section -collapsed "Name" {
 		if {$type in {0x01 0x05 0x06 0x0D 0x15 0x17}} {
@@ -1167,7 +1163,8 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 	hex	2 "Thing"
 	set	size [len_field Code]
 	set	name ""
-	for_n 8 { # simplified detok
+	# simplified detok
+	for_n 8 {
 		set	a [uint8]
 		set	name $name[format %c [expr $a<86?$a+32:$a==115?952:$a>86?$a-24:20]]
 	}

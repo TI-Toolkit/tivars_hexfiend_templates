@@ -1,11 +1,11 @@
 # TI-73 TI-BASIC Detokenizer HexFiend template include
 # Version 1.0
-# (c) 2021-2023 LogicalJoe
+# (c) 2021-2024 LogicalJoe
 # .hidden = true;
 
 
-# 25 26 2D 74 75 76 77 92 93 are just invalid tokens
 proc BAZIC73_GetToken {term} {
+# 25 26 2D 74 75 76 77 92 93 are just invalid tokens
 set	BAZIC_00 [dict create \
 	0x01 ">DMS" \
 	0x02 "|>" \

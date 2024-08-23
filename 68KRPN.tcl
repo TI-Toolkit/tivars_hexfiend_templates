@@ -1,6 +1,6 @@
 # TI 68K RPN parser HexFiend template include
 # Version 1.1
-# (c) 2021-2023 LogicalJoe
+# (c) 2021-2024 LogicalJoe
 # .hidden = true;
 
 proc 68KRPN {size} {
@@ -326,7 +326,7 @@ set 68KRPN_TAGS [dict create \
 		FLOAT {
 			move	-8
 			hex	9 FLOAT
-			move	-11
+			move	-10
 		}
 		FUNC {
 			section $tag_name
