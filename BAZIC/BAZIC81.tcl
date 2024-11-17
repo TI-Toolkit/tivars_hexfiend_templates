@@ -6,7 +6,7 @@
 
 proc BAZIC81_GetToken {term} {
 # 07 and 56 are the "true" `Prgm` and ` `
-# tokens 00-06,08-0F,A2,E5-EB,ED-FF not normally accessable
+# tokens 00-06,08-0F,A2,E5-EB,ED-FF are inaccessable under normal operation
 set	BAZIC_00 [dict create \
 	0x07 "Prgm" \
 	0x08 "Box" \
@@ -73,7 +73,7 @@ set	BAZIC_00 [dict create \
 	0x45 "?" \
 	0x46 "^" \
 	0x47 "^^-1" \
-	0x48 "" \
+	0x48 "^^2" \
 	0x49 "^^T" \
 	0x4A "^^3" \
 	0x4B "!" \
@@ -123,7 +123,7 @@ set	BAZIC_00 [dict create \
 	0x77 "Bcol" \
 	0x78 "Crow" \
 	0x79 "Ccol" \
-	0x7A "Sigmax^2" \
+	0x7A "Tmin" \
 	0x7B "Tmax" \
 	0x7C "Tstep" \
 	0x7D "Xmin" \

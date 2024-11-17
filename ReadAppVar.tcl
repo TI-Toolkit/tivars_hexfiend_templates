@@ -278,7 +278,17 @@ proc ReadAppVar {datasize} {
 		section -collapsed "Data"
 		hex	4 CelSheet
 		ascii	8 Name
-		if {[hex 2 Number] == 0} {
+		section Flags {
+			sectionvalue [set flags [hex 1]]
+			FlagRead $flags 0 "Unknown"
+			FlagRead $flags 1 "Unknown"
+			FlagRead $flags 2 "Don't display help" "Display help"
+			FlagRead $flags 3 "Display equation evaluation in editor preview" "Display equation in editor preview"
+			foreach a {4 5 6 7} { FlagRead $flags $a "Unused"}
+		}
+		# mask 8
+		hex	1 Number
+		if {$head == "\xf3\x47\xbf\xaa"} {
 			hex	13 AA*13
 			hex	40 00*40
 			hex	20 !00*20
@@ -308,6 +318,7 @@ proc ReadAppVar {datasize} {
 				move	-1
 				hex	2 4C08
 				hex	6 001FF8000000
+				# bottom three bits are moved to D0EB10 conditional on something and Flags bit 3
 				hex	2 Unknown
 				hex	6 001FF8000000
 				hex	6 001FF8000000
