@@ -1,6 +1,6 @@
 # TI-ROM verification HexFiend template
 # Version 2.0
-# (c) 2021-2024 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 
 set hl 0
 switch -- [len] {
@@ -11,7 +11,7 @@ switch -- [len] {
 			#1.6K+
 			incr hl2 $c
 			#1.5K- (CRC16-CCITT)
-			set hl [expr ((4129*((($hl>>12)^($hl>>8))&15))^(528*($hl>>12))^($hl<<8)^$c)&65535]
+			set hl [expr ((4129*(($hl>>12)^($hl>>8)&15))^(528*($hl>>12))^($hl<<8)^$c)&65535]
 		}
 		entry "Hash 1.5K-:" [format %04X $hl]
 		entry "Hash 1.6K+:" [format %04X [expr 65535&-$hl2]]

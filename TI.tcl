@@ -1,6 +1,6 @@
 # TI graphing calculator file parser HexFiend template
 # Version 2.0
-# (c) 2021-2024 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 # .types = (
 # .73e, 73d, 73g, 73i, 73l, 73m, 73n, 73p, 73s, 73t, 73v, 73w, 73y, 73z,
 # .82b, 82d, 82g, 82i, 82l, 82m, 82n, 82p, 82s, 82t, 82w, 82y, 82z,
@@ -713,7 +713,40 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 			}
 		}
 		0x0A { BAZIC85 [len_field Code] $magic }
-		0x0C -
+		0x0C {
+			set	datalen [len_field Code]
+			set	firstbyte 1
+			if $datalen {
+				set	firstbyte [uint8]
+				move	-1
+			}
+			if {!$firstbyte && $magic == "**TI85**"} {
+				section -collapsed Code {
+					hex	1 Assembly
+					entryd	ID [hex 1] 1 [dict create \
+						0x42 "Summit TI-BASIC ASM Subroutine" \
+						0x4E "Summit Non-relocation Prgm" \
+						0x50 "PhatOS & Peak Relocation Prgm" \
+						0x52 "Summit Relocation Prgm" \
+						0x53 "Summit Shell Patch" \
+						0x54 "Summit TSR" \
+						0x70 "Peak Non-relocation Prgm" \
+						0xBD SuperNova \
+						0xF8 FutureOS \
+						0xF9 Usgard \
+						0xFB "Rigel Library" \
+						0xFC "Rigel Prgm" \
+						0xFD "ZShell 4.0"]
+					uint8	Entry\ offset
+					cstr	ascii Desc
+					bytes	[expr $datalen-[pos]+$start+2] Assembly
+				}
+			} elseif $datalen {
+				bytes	$datalen Code
+			} else {
+				entry	Code ""
+			}
+		}
 		0x12 {
 			set	datalen [len_field Code]
 			set	assembly 1
@@ -726,21 +759,7 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 				set	firstbyte [uint8]
 				move	-1
 			}
-			if {$datatype == 0x0C} {
-				if !$firstbyte {
-					section -collapsed Code {
-						hex	1 Assembly
-						entryd	Shell? [hex 1] 1 [dict create 0x50 Phatos 0xBD SuperNova 0xF9 Usgard 0xFB Rigel 0xFD zshell]
-						uint8	Offset
-						cstr	ascii Title
-						bytes	[expr $datalen-[pos]+$start+2] Assembly
-					}
-				} elseif $datalen {
-					bytes	$datalen Code
-				} else {
-					entry	Code ""
-				}
-			} elseif {$assembly == 0x8E28} {
+			if {$assembly == 0x8E28} {
 				section -collapsed Code {
 					hex	2 "Z80 token"
 					bytes	[expr $datalen-2] Assembly
