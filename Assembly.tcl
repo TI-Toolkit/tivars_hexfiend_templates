@@ -1,6 +1,6 @@
 # TI eZ80/Z80 shell header parser HexFiend template include
 # Version 1.0
-# (c) 2021-2023 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 # .hidden = true;
 
 proc isAsm {asm} {
@@ -109,9 +109,18 @@ if {$assembly == 0xBB6D} { # mono Z80
 	}
 	bytes	[expr $datalen+$posset-[pos]] "Assembly"
 } elseif {$assembly == 0xD900} { # `Stop/nop`
-	hex	6 "Mallard"
-	uint16	-hex "Start address"
-	cstr	ascii "Description"
+	# also ASH, without "Duck"
+	if {[hex 6] eq 0xD9004475636B} {
+		move -6
+		hex 6 "Mallard"
+		uint16	-hex "Start address"
+		cstr	ascii "Description"
+	} else {
+		move -6
+		hex 2 "ASH"
+		hex 1 "Something"
+		cstr	ascii "Description"
+	}
 	bytes	[expr $datalen+$posset-[pos]] "Assembly"
 } elseif {$assembly == 0xD500} { # `Return/nop` crash
 	hex	3 "Crash"

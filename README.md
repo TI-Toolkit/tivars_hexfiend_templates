@@ -7,9 +7,7 @@ The `BAZIC/` directory contains files relating to TI-BASIC detokenization.
 `TI ROM checksum.tcl` contains algorithms used to verify each of TI's ROMs.
 
 These templates are primarily designed for TI-Z80 calculators:
-Files with extensions `.(8[23x56]|73)*` are generally assumed to work.
-
-Files for 68K models (`.89*`, `.9[2x]*`, and `.v2*`) are WIP.
+Files with extensions `.(73|8[23x569]|9[2x]|v2)*` are supported
 
 ## Installation
 
@@ -30,3 +28,5 @@ August 26, 2023 - First public release
 June 16, 2023 - Version 2.0
 
 January 8, 2023 - First private release
+
+May 11, 2025 - Full 68K support

@@ -1,6 +1,6 @@
 # TI-appvar parser HexFiend template include
 # Version 1.0
-# (c) 2021-2023 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 # .hidden = true;
 
 
@@ -12,7 +12,7 @@
 
 proc ReadAppVar {datasize} {
 	proc readByLine {codesize {deliminator 10} {terminator 500}} {
-		section	-collapsed "Body"
+		section "Body"
 		set	start [pos]
 		set	number 0
 		set	term 400

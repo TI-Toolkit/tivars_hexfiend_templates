@@ -11,7 +11,7 @@ proc Current {b} {
 
 set hl 0
 goto -6
-if {[len] in {1048576 2097152} && [uint16]==43605} { # TI-92 (II)
+if {[len] in {1048576 2097152} && [hex 2]==21930} { # TI-92 (II)
 	goto 0
 	big_endian
 	while {[pos]-[len]+4} {
@@ -30,7 +30,7 @@ switch [len] {
 			#1.6K+
 			incr hl2 $c
 			#1.5K- (CRC16-CCITT)
-			set hl [expr ((4129*(($hl>>12)^($hl>>8)&15))^(528*($hl>>12))^($hl<<8)^$c)&65535]
+			set hl [expr 4129*($hl>>12^$hl>>8&15)^$hl/4096*528^$hl%256<<8^$c]
 		}
 		Checksum $hl 4 " 1.5K-"
 		Checksum -$hl2 4 " 1.6K+"
@@ -42,7 +42,7 @@ switch [len] {
 			incr hl [uint16]
 		}
 		Checksum $hl 4
-		goto 49150
+		goto -2
 		Current 2
 	}
 	65536 { # 68K boot

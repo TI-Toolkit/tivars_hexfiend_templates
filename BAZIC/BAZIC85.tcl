@@ -1,6 +1,6 @@
 # TI-8[56] TI-BASIC Detokenizer HexFiend template include
 # Version 1.0
-# (c) 2021-2024 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 # .hidden = true;
 
 
@@ -360,13 +360,13 @@ set	BAZIC86_8E [dict create \
 	0x31 "Deltalst" \
 ]
 
-	proc BAZIC85dict {a b {c -1}} {
+	proc BAZIC85dict {a b {c 0}} {
 		if [dict exists $b $a] {
-			return	[dict get $b $a]
-		} elseif {$c == -1} {
-			return	%$a%
+			return [dict get $b $a]
+		} elseif $c {
+			return [format "\\u%02X%02X" $c $a]
 		} else {
-			return	%$c[format "%02X" $a]%
+			return [format "\\x%02X" $a]
 		}
 	}
 	proc 85fontmap {s} {
@@ -374,31 +374,31 @@ set	BAZIC86_8E [dict create \
 	}
 
 	if {$term == 0x2D} { # string
-		set	token \"[cstr ascii]\"
+		set token \"[cstr ascii]\"
 	} elseif {$term in {0x32 0x3B 0x3C}} { # equation name
-		set	token [ascii [uint8]]
+		set token [ascii [uint8]]
 	} elseif {$term >= 0x33 && $term <=0x3A} { # variable name
-		set	token [ascii [expr $term-50]]
+		set token [ascii [expr $term-50]]
 	} elseif {$term == 0x3D} { # built-in variables
-		set	token [BAZIC85dict [hex 1] $BAZIC85_3D 3D]
+		set token [BAZIC85dict [hex 1] $BAZIC85_3D 3D]
 	} elseif {$term == 0x3E} { # conversion
-		set	token \ [ascii [expr [uint8]-50]]>[ascii [expr [uint8]-50]]
+		set token \ [ascii [expr [uint8]-50]]>[ascii [expr [uint8]-50]]
 	} elseif {$term == 0x44} { # number
-		set	token [cstr ascii]
+		set token [cstr ascii]
 	} elseif {$term == 0x8E && $magic == "**TI86**"} { # TI-86 tokens
-		set	token [BAZIC85dict [hex 1] $BAZIC86_8E 8E]
+		set token [BAZIC85dict [hex 1] $BAZIC86_8E 8E]
 	} elseif {$term == 0xE0} { # Lbl
-		set	token \Lbl\ [cstr ascii]
+		set token \Lbl\ [cstr ascii]
 	} elseif {$term == 0xE1} { # Goto
 		# if !zero, this is the offset from the start of the program to right after the label
 		uint16
-		set	token \Goto\ [cstr ascii]
+		set token \Goto\ [cstr ascii]
 	} else {
-		set	token [BAZIC85dict $term $BAZIC85_00]
+		set token [BAZIC85dict $term $BAZIC85_00]
 	}
 	# how to account for carrage returns?
 	if {$token == "AsmPrgm"} { # Tokenized Assembly
-		set	token $token\ [cstr ascii]
+		set token $token\ [cstr ascii]
 	}
 	return $token
 }
@@ -407,33 +407,42 @@ set	BAZIC86_8E [dict create \
 proc BAZIC85 {size {magic "**TI86**"}} {
 	section -collapsed "Code" {
 		if {$size>1} {
-			set	e [hex 2]
-			move	-2
+			set e [hex 2]
+			move -2
 			if {$e == 0x8E29} {
-				hex	2 "Edit-lock"
-				incr	size -2
+				hex 2 "Edit-lock"
+				incr size -2
 			}
 		}
 
-		set	start [pos]
+		set start [pos]
 
-		set	e 0
-		while {[pos]-$start < $size} {
-			incr	e
-			set	line ""
-			set	term 0
-			set	Linestart [pos]
-			while {($term != 0x6F) && ([pos]-$start < $size)} {
-				set	term [hex 1]
-				set	line $line[BAZIC85_GetToken $term $magic]
+		set e 0
+		while {!$e || ([pos] < $size+$start)} {
+			if $e { int8 }
+			incr e
+			set line ""
+			set Linestart [pos]
+			while {[pos] < $size+$start} {
+				if {[hex 1] == 0x6F} {
+					move -1
+					break
+				}
+				move -1
+				append line [BAZIC85_GetToken [hex 1] $magic]
 			}
-			entry	"Line $e" $line [expr [pos]-$Linestart] $Linestart
+			if {$line==""} {
+				entry "Line $e" ""
+			} else {
+				entry "Line $e" $line [expr [pos]-$Linestart] $Linestart
+			}
 		}
 		# if it was a single line, display it as the section value
 		if {$e == 1} {
 			sectionvalue $line
-		} elseif {$size != 0} {
+		} elseif $size {
 			sectionvalue "\[expand for code]"
 		}
 	}
+	goto [expr $start + $size]
 }

@@ -1,9 +1,8 @@
 # TI graphing calculator flash file parser HexFiend template
 # Version 1.2
-# (c) 2021-2023 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 # .hidden = true;
 
-if [catch {
 proc uint24l {a {b -1}} {
 	if {$b==-1} {
 		entry	$a [format "0x%06X" [uint24]] 3 [expr [pos]-3]
@@ -197,17 +196,17 @@ proc readExtendedFormat {fieldSize} {
 		bytes	[expr $fieldSize-$main] "Body"
 		endsection
 	} elseif {[uint32] == 0x3D537B16} {
-		section -collapsed "Data"
 		move	-4
+		section -collapsed "Data"
 		section "Additional structure" {
 			hex	4 "68k"
 			ascii	9 "Name"
 			bytes	25 "Reserved"
 			big_endian
 			hex	4 Unknown
-			set	main [hex 4 Main?]
-			hex	4 Entry?
-			hex	4 Unknown
+			set	main [hex 4 Main]
+			hex	4 Initialized\ location
+			hex	4 Initialized\ size
 			hex	4 Reserved
 			little_endian
 		}
@@ -240,6 +239,12 @@ proc getsection {} {
 				incr	a [getsection]
 			} elseif {$field_id == 817} {
 				readExtendedFormat $field_size_2
+			} elseif {$field_id == "090"} {
+				set a [hex 4]
+				# can't know timezone this was built in
+				# set absoluteTime [expr {[clock scan "1997-01-01" -format "%Y-%m-%d"] + $a}]
+				set date [clock format $a -format "%y/%m/%d, %H:%M:%S"]
+				entry Data $a\ (+$date) 4 [expr [pos]-4]
 			} else {
 				hex	$field_size_2 "Data"
 			}
@@ -301,4 +306,3 @@ if {[len]-[pos] > 78} {
 if {![end]} {
 	bytes	eof "Extra Data"
 }
-}] {}

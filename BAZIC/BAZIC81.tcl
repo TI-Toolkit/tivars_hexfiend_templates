@@ -1,6 +1,6 @@
 # TI-81 TI-BASIC Detokenizer HexFiend template include
 # Version 1.0
-# (c) 2021-2024 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 # .hidden = true;
 
 
@@ -239,27 +239,33 @@ set	BAZIC_00 [dict create \
 	0xEC "\n" \
 ]
 	if [dict exists $BAZIC_00 $term] {
-		return	[dict get $BAZIC_00 $term]
+		return [dict get $BAZIC_00 $term]
 	} else {
-		return	%$term%
+		return [format "\\x%02X" $term]
 	}
 }
 
 proc BAZIC81 {size} {
 	section Code {
-		set	start [pos]
-		set line ""
-		set	e 0
-		while {[pos] < $size+20} {
-			incr	e
-			set	line ""
-			set	term 0
-			set	Linestart [pos]
-			while {($term != 0xEC) && ([pos]-$start < $size)} {
-				set	term [hex 1]
-				set line $line[BAZIC81_GetToken $term]
+		set e 0
+		while {!$e || ([pos] < $size+20)} {
+			if $e { int8 }
+			incr e
+			set line ""
+			set Linestart [pos]
+			while {[pos] < $size+20} {
+				if {[hex 1] == 0xEC} {
+					move -1
+					break
+				}
+				move -1
+				append line [BAZIC81_GetToken [hex 1]]
 			}
-			entry	"Line $e" $line [expr [pos]-$Linestart] $Linestart
+			if {$line==""} {
+				entry "Line $e" ""
+			} else {
+				entry "Line $e" $line [expr [pos]-$Linestart] $Linestart
+			}
 		}
 	}
 }

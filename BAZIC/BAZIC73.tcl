@@ -1,6 +1,6 @@
 # TI-73 TI-BASIC Detokenizer HexFiend template include
 # Version 1.0
-# (c) 2021-2024 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 # .hidden = true;
 
 
@@ -556,19 +556,18 @@ set	BAZIC_FE [dict create \
 ]
 
 
-	proc BAZICdict {a b {c -1}} {
+	proc BAZICdict {a b {c 0}} {
 		if [dict exists $b $a] {
-			return	[dict get $b $a]
-		} elseif {$c == -1} {
-			return	%$a%
+			return [dict get $b $a]
+		} elseif $c {
+			return [format "\\u%02X%02X" $c $a]
 		} else {
-			return	%$c[format "%02X" $a]%
+			return [format "\\x%02X" $a]
 		}
 	}
 
-	#set	term [hex 1]
 	if {$term in {0x5C 0x5D 0x5E 0x60 0x61 0x62 0x63 0x73 0xAA 0xBB 0xF2}} {
-		set	token [BAZICdict [hex 1] [set "BAZIC_[format "%02X" $term]"] $term]
+		set token [BAZICdict [hex 1] [set "BAZIC_[format "%02X" $term]"] $term]
 	} elseif {$term in {0xF8 0xF9 0xFA 0xFB 0xFC 0xFD 0xFE}} {
 		set dic "BAZIC_[format "%02X" $term]"
 		set conv [hex 1]
@@ -579,34 +578,42 @@ set	BAZIC_FE [dict create \
 		if {$firstex && $secondex} {
 			set token " [dict get [set $dic] $first]>[dict get [set $dic] $second]"
 		} else {
-			set token "%[format "%02X" $term][format "%02X" $conv]%"
+			set token "\\u[format "%02X%02X" $term $conv]"
 		}
 	} else {
-		set	token [BAZICdict $term $BAZIC_00]
+		set token [BAZICdict $term $BAZIC_00]
 	}
 	return $token
 }
 
 proc BAZIC73 {size} {
 	section -collapsed "Code" {
-		set	start [pos]
+		set start [pos]
 
-		set	e 0
-		while {[pos]-$start < $size} {
-			incr	e
-			set	line ""
-			set	term 0
-			set	Linestart [pos]
-			while {($term != 0x3F) && ([pos]-$start < $size)} {
-				set	term [hex 1]
-				set	line $line[BAZIC73_GetToken $term]
+		set e 0
+		while {!$e || ([pos] < $size+$start)} {
+			if $e { int8 }
+			incr e
+			set line ""
+			set Linestart [pos]
+			while {[pos] < $size+$start} {
+				if {[hex 1] == 0x3F} {
+					move -1
+					break
+				}
+				move -1
+				append line [BAZIC73_GetToken [hex 1]]
 			}
-			entry	"Line $e" $line [expr [pos]-$Linestart] $Linestart
+			if {$line==""} {
+				entry "Line $e" ""
+			} else {
+				entry "Line $e" $line [expr [pos]-$Linestart] $Linestart
+			}
 		}
 		# if it was a single line, display it as the section value
 		if {$e == 1} {
 			sectionvalue $line
-		} elseif {$size != 0} {
+		} elseif $size {
 			sectionvalue "\[expand for code]"
 		}
 	}

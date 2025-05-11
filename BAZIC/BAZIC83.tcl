@@ -1,10 +1,10 @@
 # TI-8[234] TI-BASIC Detokenizer HexFiend template include
 # Version 2.0
-# (c) 2021-2024 LogicalJoe
+# (c) 2021-2025 LogicalJoe
 # .hidden = true;
 
 
-proc BAZIC83_GetToken {term {iceT 0}} {
+proc BAZIC83_GetToken {term} {
 set	BAZIC_00 [dict create \
 	0x01 ">DMS" \
 	0x02 ">Dec" \
@@ -263,6 +263,7 @@ set	BAZIC_5C [dict create\
 	0x07 "\[H]" \
 	0x08 "\[I]" \
 	0x09 "\[J]" \
+	default "Matr" \
 ]
 
 set	BAZIC_5D [dict create\
@@ -272,6 +273,7 @@ set	BAZIC_5D [dict create\
 	0x03 "L4" \
 	0x04 "L5" \
 	0x05 "L6" \
+	default "List" \
 ]
 
 set	BAZIC_5E [dict create\
@@ -306,6 +308,7 @@ set	BAZIC_5E [dict create\
 	0x80 "|u" \
 	0x81 "|v" \
 	0x82 "|w" \
+	default "Equ" \
 ]
 
 set	BAZIC_60 [dict create \
@@ -319,6 +322,7 @@ set	BAZIC_60 [dict create \
 	0x07 "Pic8" \
 	0x08 "Pic9" \
 	0x09 "Pic0" \
+	default "Pic" \
 ]
 
 set	BAZIC_61 [dict create \
@@ -332,19 +336,7 @@ set	BAZIC_61 [dict create \
 	0x07 "GDB8" \
 	0x08 "GDB9" \
 	0x09 "GDB0" \
-]
-
-set	BAZIC_62_ice [dict create \
-	0x0A "DefineSprite(" \
-	0x0B "Call " \
-	0x0C "Data(" \
-	0x0D "Copy(" \
-	0x0E "Alloc(" \
-	0x0F "DefineTilemap(" \
-	0x10 "CopyData(" \
-	0x11 "LoadData(" \
-	0x12 "SetBrightness(" \
-	0x13 "Compare(" \
+	default "GDB"\
 ]
 
 set	BAZIC_62 [dict create \
@@ -503,6 +495,7 @@ set	BAZIC_AA [dict create \
 	0x07 "Str8" \
 	0x08 "Str9" \
 	0x09 "Str0" \
+	default "Str"\
 ]
 
 set	BAZIC_BB [dict create \
@@ -866,57 +859,56 @@ set	BAZIC_EF [dict create \
 	0xA6 "piecewise(" \
 ]
 
-	proc BAZICdict {a b {c -1}} {
+	proc BAZICdict {a b {c ""}} {
 		if [dict exists $b $a] {
-			return	[dict get $b $a]
-		} elseif {$c == -1} {
-			return	%$a%
-		} else {
-			return	%$c[format "%02X" $a]%
+			return [dict get $b $a]
+		} elseif {$c ne ""} {
+			if [dict exists $b default] {
+				set c [dict get $b default]
+			} else {
+				return [format "\\u%02X%02X" $c $a]
+			}
 		}
+		return [format "$c\\x%02X" $a]
 	}
 
-	#set	term [hex 1]
-	if {$term in {0x5C 0x5D 0x5E 0x60 0x61 0x63 0x7E 0xAA 0xBB 0xEF}} {
-		set	token [BAZICdict [hex 1] [set "BAZIC_[format "%02X" $term]"] $term]
-	} elseif {$term == 0x62} {
-		# separate for ICE tokens
-		set	term2 [hex 1]
-		if {$iceT == 1 && [dict exists $BAZIC_62_ice $term2] } {
-			set	token [BAZICdict $term2 $BAZIC_62_ice 62]
-		} else {
-			set	token [BAZICdict $term2 $BAZIC_62 62]
-		}
+	# [info exists [format "BAZIC_%02X" $term]]
+	if {$term in {0x5C 0x5D 0x5E 0x60 0x61 0x62 0x63 0x7E 0xAA 0xBB 0xEF}} {
+		set token [BAZICdict [hex 1] [set "BAZIC_[format "%02X" $term]"] $term]
 	} else {
-		set	token [BAZICdict $term $BAZIC_00]
+		set token [BAZICdict $term $BAZIC_00]
 	}
 	return $token
 }
 
 proc BAZIC83 {size} {
 	section -collapsed "Code" {
-		set	start [pos]
-		if {$size!=0} {
-			set	iceT [expr [uint8] == 44]
-			move	-1
-		}
+		set start [pos]
 
-		set	e 0
-		while {[pos]-$start < $size} {
-			incr	e
-			set	line ""
-			set	term 0
-			set	Linestart [pos]
-			while {($term != 0x3F) && ([pos]-$start < $size)} {
-				set	term [hex 1]
-				set	line $line[BAZIC83_GetToken $term $iceT]
+		set e 0
+		while {!$e || ([pos] < $size+$start)} {
+			if $e { int8 }
+			incr e
+			set line ""
+			set Linestart [pos]
+			while {[pos] < $size+$start} {
+				if {[hex 1] == 0x3F} {
+					move -1
+					break
+				}
+				move -1
+				append line [BAZIC83_GetToken [hex 1]]
 			}
-			entry	"Line $e" $line [expr [pos]-$Linestart] $Linestart
+			if {$line==""} {
+				entry "Line $e" ""
+			} else {
+				entry "Line $e" $line [expr [pos]-$Linestart] $Linestart
+			}
 		}
 		# if it was a single line, display it as the section value
 		if {$e == 1} {
 			sectionvalue $line
-		} elseif {$size != 0} {
+		} elseif $size {
 			sectionvalue "\[expand for code]"
 		}
 	}

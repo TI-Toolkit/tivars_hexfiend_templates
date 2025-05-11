@@ -8,9 +8,9 @@
 # .8xb, 8xc, 8xd, 8xe, 8xg, 8xi, 8xl, 8xm, 8xn, 8xo, 8xp, 8xs, 8xt, 8xv, 8xw, 8xy, 8xz,
 # .85b, 85c, 85d, 85g, 85i, 85k, 85l, 85m, 85n, 85p, 85r, 85s, 85t, 85v, 85w, 85y, 85z,
 # .86b, 86c, 86d, 86g, 86i, 86k, 86l, 86m, 86n, 86p, 86r, 86s, 86t, 86v, 86w, 86y, 86z,
-# .89a, 89c, 89d, 89e, 89f, 89i, 89l, 89m, 89p, 89r, 89s, 89t, 89x, 89y, 89z,
+# .89a, 89c, 89d, 89e, 89f, 89g, 89i, 89l, 89m, 89p, 89r, 89s, 89t, 89x, 89y, 89z,
 # .92a, 92b, 92c, 92d, 92e, 92f, 92g, 92i, 92l, 92m, 92p, 92r, 92s, 92t, 92x, 92y,
-# .9xa, 9xc, 9xd, 9xe, 9xq, 9xf, 9xg, 9xi, 9xl, 9xm, 9xp, 9xr, 9xs, 9xt, 9xx, 9xy,
+# .9xa, 9xc, 9xd, 9xe, 9xf, 9xg, 9xi, 9xl, 9xm, 9xp, 9xq, 9xr, 9xs, 9xt, 9xx, 9xy, 9xz,
 # .v2a, v2c, v2d, v2e, v2f, v2g, v2i, v2l, v2m, v2p, v2q, v2r, v2s, v2t, v2x, v2y, v2z,
 # .8cq, 8xq,
 # .73k, 8xk, 8ck, 8ek,
@@ -61,7 +61,7 @@ foreach a {ReadAppVar 68KRPN Assembly} {
 	if [file exists $b] {
 		source	$b
 	} else {
-		proc $a {len} {
+		proc $a {len {a}} {
 			if $len {
 				bytes	$len Data
 			} else {
@@ -410,13 +410,13 @@ proc readGDB {} {
 	variable Z80typeDict
 	set	datalen [len_field]
 	set	start [pos]
-	set	isn82 ![uint8]
+	set	isn82 ![int8]
 	move	-1
 	if $isn82 {
 		uint8	Reserved
 	}
-	set	Mode [uint8]
-	entryd	"Graph mode flag" $Mode 1 [dict create 16 Function 32 Polar 64 Parametric 128 Sequence]
+	set	Mode [hex 1]
+	entry	"Graph mode" "$Mode ([expr $Mode&16?"Function":$Mode&32?"Polar":$Mode&64?"Parametric":"Sequential"])" 1 [expr [pos]-1]
 	section "Format flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
@@ -452,23 +452,18 @@ proc readGDB {} {
 	}
 
 	set	numbs "Xmin Xmax Xscl Ymin Ymax Yscl"
-	switch -- $Mode {
-		16 {
-			set	EquSets "Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0"
-			if $isn82 { lappend numbs Xres }
-		}
-		32 {
-			set	EquSets "r1 r2 r3 r4 r5 r6"
-			lappend numbs thetamin thetamax thetastep
-		}
-		64 {
-			set	EquSets "X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T"
-			lappend numbs Tmin Tmax Tstep
-		}
-		128 {
-			set	EquSets "u v[expr $isn82?" w":""]"
-			append numbs [expr $isn82?{ PlotStart nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin) PlotStep w(nMin+1)}:{ nMin nMax UnStart VnStart nStart}]
-		}
+	if {$Mode & 0x10} {
+		set EquSets "Y1 Y2 Y3 Y4 Y5 Y6 Y7 Y8 Y9 Y0"
+		if $isn82 { lappend numbs Xres }
+	} elseif {$Mode & 0x20} {
+		set EquSets "r1 r2 r3 r4 r5 r6"
+		lappend numbs thetamin thetamax thetastep
+	} elseif {$Mode & 0x40} {
+		set EquSets "X1T/Y1T X2T/Y2T X3T/Y3T X4T/Y4T X5T/Y5T X6T/Y6T"
+		lappend numbs Tmin Tmax Tstep
+	} else {
+		set EquSets "u v[expr $isn82?" w":""]"
+		append numbs [expr $isn82?{ PlotStart nMax u(nMin) v(nMin) nMin u(nMin+1) v(nMin+1) w(nMin) PlotStep w(nMin+1)}:{ nMin nMax UnStart VnStart nStart}]
 	}
 	section "Numbers" {
 		foreach index $numbs {
@@ -633,56 +628,25 @@ proc read85GDB {type {magic "**TI86**"}} {
 	}
 }
 
-proc 68KreadBody {datatype {defaultLen 0}} {
+proc 68KreadBody {datatype varName {defaultLen 0}} {
 	section -collapsed Data
-	set	start [pos]
 	switch -- $datatype {
 		0x00 -
 		0x04 -
 		0x06 -
+		0x0B -
 		0x0C -
+		0x0D -
+		0x10 -
 		0x12 -
-		0x13 { # RPN-TAG formats
-			68KRPN	$defaultLen
-		}
-		0x0B {
-			big_endian
-			uint16	"Cursor offset"
-			little_endian
-			set	delim [hex 1]
-			move	-1
-			while $delim {
-				section -collapsed Line {
-					set	LineStart [pos]
-					set	delim [hex 1]
-					while {$delim != 0 && $delim != 13} {
-						set	delim [uint8]
-					}
-					move	-2
-					set	lineLen [expr [pos]-$LineStart]
-					goto	$LineStart
-					entryd	"Line type" [hex 1] 1 [dict create 0x0C Page\ break 0x20 Normal 0x43 Command 0x50 Print\ object]
-					if $lineLen {
-						sectionvalue [ascii $lineLen "Line"]
-					} else {
-						entry	Line ""
-					}
-					entryd	Deliminator [hex 1] 1 [dict create 0x00 EOF 0x0D Line\ End]
-				}
-			}
-			hex	1 "TEXT_TAG (E0)"
-		}
-		0x1C {
-			# hack until magic is passed to appvar handler
-			set	st [pos]
-			ReadAppVar $defaultLen
-			goto	[expr $st+$defaultLen]
-		#	move	1
-		#	entry	OTH_TAG [cstr ascii] $st [expr [pos]-$st]
-		#	hex	1 "TEXT_TAG (E0)"
+		0x13 -
+		0x1C -
+		0x21 {
+			68KRPN	$defaultLen $varName
 		}
 		default { bytes $defaultLen Data }
 	}
+	little_endian
 	endsection
 }
 
@@ -742,24 +706,24 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 					bytes	[expr $datalen-[pos]+$start+2] Assembly
 				}
 			} elseif $datalen {
-				bytes	$datalen Code
+				str	$datalen ascii Code
 			} else {
 				entry	Code ""
 			}
 		}
 		0x12 {
 			set	datalen [len_field Code]
-			set	assembly 1
+			set	firstword 1
 			set	firstbyte 1
 			if {$datalen > 1} {
-				set	assembly [hex 2]
+				set	firstword [hex 2]
 				move	-2
 			}
 			if $datalen {
 				set	firstbyte [uint8]
 				move	-1
 			}
-			if {$assembly == 0x8E28} {
+			if {$firstword == 0x8E28} {
 				section -collapsed Code {
 					hex	2 "Z80 token"
 					bytes	[expr $datalen-2] Assembly
@@ -767,10 +731,30 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 			} elseif !$firstbyte {
 				section -collapsed Code {
 					hex	1 Untokenized
-					if !$assembly {
+					incr	datalen -1
+					if !$firstword {
 						hex	1 Locked
+						incr	datalen -1
 					}
-					bytes	[expr $datalen-[pos]+$start+2] "Code"
+
+					# model line character sets should become a function with the different encodings
+					set	start [pos]
+					set	linenumber 0
+					if $datalen {
+						set	sections [split [str $datalen isolatin1] \xD6]
+						foreach line $sections {
+							incr	linenumber
+							if {$line==""} {
+								entry	"Line $linenumber" ""
+							} else {
+								entry	"Line $linenumber" "[string map {"\x19" ">=" "\x1C" "->"} $line]" [string length $line] $start
+							}
+							incr	start [expr [string length $line]+1]
+						}
+					} else {
+						entry	"Line 1" ""
+					}
+
 				}
 			} else {
 				BAZIC85	$datalen $magic
@@ -917,6 +901,9 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 		default { bytes $defaultLen Data }
 	}
 	endsection
+	if $defaultLen {
+		goto [expr $start+$defaultLen]
+	}
 }
 
 proc getNameZ80 {title type length {magic ""}} {
@@ -943,7 +930,7 @@ proc getNameZ80 {title type length {magic ""}} {
 				move	-2
 				if {$a < 6} {
 					set	name [$bint\_GetToken [hex 1]]
-				} elseif {$a == 0x40} {
+				} elseif {($a == 0x40) && $magic in {"**TI73**" "**TI83F*"}} {
 					set	name "|LIDList"
 				} else {
 					set	name [string map {[ θ ] |L} [ascii $length]]
@@ -1031,7 +1018,7 @@ proc SysTab {size magic} {
 	}
 	endsection
 
-	Z80readBody $type $magic $size
+	Z80readBody $type $magic
 	sectionname $typename\ entry
 	sectionvalue [expr {$name==""?"":"$name - "}][expr [pos]-$EntryStart]\ bytes
 
@@ -1059,7 +1046,7 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 	source	[file join $CurDir TI-Flash.tcl]
 } elseif {$magic in {"**TI89**" "**TI92**" "**TI92P*"}} {
 	hex	2 "Thing"
-	ascii	8 "Folder name"
+	ascii	8 "Directory"
 	ascii	40 "Comment"
 	set	numFiles [uint16 "Variable count"]
 	section "Variables"
@@ -1079,24 +1066,26 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 			uint16	"Items in dir"
 		}
 		sectionname $typeName\ entry
-		set	retu [pos]
-		goto	$bodyOffset
-		section "Body" {
-			set	loopStart [pos]
-			if {$datatype == 0x1D} {
-				bytes	39266 Data
-			} else {
-				hex	4 NULLs
-				big_endian
-				set	Size [uint16 Data\ length]
-				little_endian
-				68KreadBody $datatype $Size
-				sectionvalue [expr $Size+8]\ bytes
+		if {$datatype!=0x1F} {
+			set	retu [pos]
+			goto	$bodyOffset
+			section "Body" {
+				set	loopStart [pos]
+				if {$datatype == 0x1D} {
+					bytes	39266 Data
+				} else {
+					hex	4 Something
+					big_endian
+					set	Size [uint16 Data\ length]
+					little_endian
+					68KreadBody $datatype $name $Size
+					sectionvalue [expr $Size+8]\ bytes
+				}
+				CheckSum $loopStart [pos]
 			}
-			CheckSum $loopStart [pos]
+			sectionvalue "$name"
+			goto	$retu
 		}
-		sectionvalue "$name"
-		goto	$retu
 		endsection
 	}
 	endsection
@@ -1128,6 +1117,9 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 				len_field "Data 2"
 				len_field "Data 3"
 				uint16	-hex "Address of data 2"
+				if {$magic == "**TI86**"} {
+					len_field "Data 4"
+				}
 			} else {
 				len_field
 				set	a $Z80typeDict
@@ -1162,9 +1154,12 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 
 		section "Body" {
 			if {$typeName=="Backup"} {
-				bytes	[len_field "Data 1"] "Data 1"
-				bytes	[len_field "Data 2"] "Data 2"
-				bytes	[len_field "Data 3"] "Data 3"
+				bytes	[len_field "Data 1"] "Data 1 \[RAM?\]"
+				bytes	[len_field "Data 2"] "Data 2 \[VAT\]"
+				bytes	[len_field "Data 3"] "Data 3 \[symTable\]"
+				if {$magic == "**TI86**"} {
+					bytes	[len_field "Data 4"] "Data 4"
+				}
 			} elseif {$magic in {"**TI85**" "**TI86**"}} {
 				85readBody $datatype $magic [len_field]
 			} else {
