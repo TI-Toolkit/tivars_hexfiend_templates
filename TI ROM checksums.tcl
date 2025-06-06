@@ -1,21 +1,41 @@
 # TI-ROM checksums HexFiend template
-# Version 2.1
+# Version 2.3
 # (c) 2021-2025 LogicalJoe
 
 proc Checksum {a b {c ""}} {
 	entry "Checksum$c:" [format %0$b\X [expr 16**$b-1&$a]]
 }
-proc Current {b} {
+proc Current b {
 	entry "Current:" [format %0[expr 2*$b]X [uint[expr 8*$b]]] $b [expr [pos]-$b]
 }
 
 set hl 0
-goto -6
-if {[len] in {1048576 2097152} && [hex 2]==21930} { # TI-92 (II)
-	goto 0
+# TI-92 (II) & 68K boot
+if {[len] in {65536 1048576 2097152 4194304} && ![hex 2]} {
 	big_endian
-	while {[pos]-[len]+4} {
-		incr hl [uint32]
+	set a [hex 6]
+	goto 0
+	if !($a&0xFF000000FF) {
+		for {set i 0} {$i<256} {incr i} {
+			set k $i
+			foreach j {0 1 2 3 4 5 6 7} {
+				set k [expr $k/2^$k%2*0xEDB88320]
+			}
+			lappend t $k
+		}
+		set a 0xFFFFFFFF
+		while {[pos]-[len]+4} {
+			set a [expr $a>>8^[lindex $t [expr [uint8]^$a&255]]]
+		}
+		set hl ~$a
+	} elseif $a&255 {
+		while {[pos]-65532} {
+			incr hl [uint16]
+		}
+	} else {
+		while {[pos]-[len]+4} {
+			incr hl [uint32]
+		}
 	}
 	Checksum $hl 8
 	Current 4
@@ -44,14 +64,6 @@ switch [len] {
 		Checksum $hl 4
 		goto -2
 		Current 2
-	}
-	65536 { # 68K boot
-		big_endian
-		while {[pos]-65532} {
-			incr hl [uint16]
-		}
-		Checksum $hl 8
-		Current 4
 	}
 	131072 - 262144 { # TI-8[2356]
 		while {![end]} {

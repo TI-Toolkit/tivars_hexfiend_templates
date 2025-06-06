@@ -1159,7 +1159,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 					FlagRead $Flags 0 "EULER" "RK"
 					entryd Bits\ 1-2 [expr $Flags & 6] 1 [dict create 0 FLDOFF 2 DIRFLD 4 SLPFLD 6 ~SLPFLD]
 					FlagRead $Flags 3
-					FlagRead $Flags 4 "Custom Axes" "UNcustom Axes"
+					FlagRead $Flags 4 "Custom Axes" "Uncustom Axes"
 					foreach a {5 6 7} {
 						FlagRead $Flags $a
 					}
@@ -1259,12 +1259,15 @@ proc Recursive_RPN {{parent_precedence 15}} {
 			bytes [expr $endLoc-[pos]+1] Data
 		}
 		0xF8 { # OTHER
+			# TODO: base this on the ID instead of appvar magic (68K-natives might not have this)
 			hex 1 OTH
 			move -2
-			entry Type [String_68]
+			entry Magic [String_68]
 			set endLoc [pos]
 			goto $dataStart
 			ReadAppVar [expr $endLoc-[pos]+1]
+			# sometimes appvars switch endianness
+			big_endian
 		}
 		default {
 			set lineEnd [pos]

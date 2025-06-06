@@ -33,18 +33,6 @@ proc ReadAppVar {datasize} {
 		endsection
 	}
 
-	proc reverse_leb128 {{name ""}} {
-		set	start [pos]
-		set	byte 128
-		for {set shift 0} {$byte & 0x80} {incr shift 7} {
-			set	byte [uint8]
-			incr	number [expr ($byte & 127) << $shift]
-		}
-		if {$name != ""} {
-			entry	$name $number [expr [pos]-$start] $start
-		}
-		return	$number
-	}
 	proc uint16l {a {b -1}} {
 		if {$b==-1} {
 			set	b [uint16]
@@ -81,7 +69,7 @@ proc ReadAppVar {datasize} {
 		section	-collapsed "Data"
 		ascii	4 "Python module"
 		incr	datasize -4
-		set	length [reverse_leb128 "Length"]
+		set	length [uleb128 "Length"]
 		hex	1 "Verison?"
 		incr	datasize -3
 		set	offset [pos]
@@ -91,7 +79,7 @@ proc ReadAppVar {datasize} {
 		bytes	$datasize "Compiled module"
 		endsection
 	} elseif {$head == "IM8C"} {
-		#https://github.com/TI-Planet/img2calc/blob/master/index.html#L1127-L1187
+		#https://github.com/TI-Planet/img2calc/blob/4d5599177229c18f0e28b12f90b881bb09f78b77/index.html#L1153-L1213
 		section	-collapsed "Data"
 		set	start [pos]
 		ascii	4 "Python image"
@@ -125,6 +113,8 @@ proc ReadAppVar {datasize} {
 		#https://www.ticalc.org/archives/files/fileinfo/477/47772.html
 		#https://www.ticalc.org/pub/text/misc/studycards83.txt
 		#TODO: size limits
+
+		little_endian
 
 		proc ReadCardItem {} {
 			section	-collapsed "Item"
@@ -274,7 +264,7 @@ proc ReadAppVar {datasize} {
 			foreach a {6 7} { FlagRead $flags $a }
 		}
 		ascii	9 "Current AppVar"
-	} elseif {$head == "\xf3\x47\xbf\xaa" || $head == "\xf3\x47\xbf\xab"} {
+	} elseif {$head in {"\xf3\x47\xbf\xaa" "\xf3\x47\xbf\xab"}} {
 		section -collapsed "Data"
 		hex	4 CelSheet
 		ascii	8 Name
