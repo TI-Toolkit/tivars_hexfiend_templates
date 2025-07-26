@@ -3,10 +3,10 @@
 # (c) 2021-2025 LogicalJoe
 
 proc Checksum {a b {c ""}} {
-	entry "Checksum$c:" [format %0$b\X [expr 16**$b-1&$a]]
+	entry "Checksum$c" [format 0x%X [expr 16**$b-1&$a]]
 }
 proc Current b {
-	entry "Current:" [format %0[expr 2*$b]X [uint[expr 8*$b]]] $b [expr [pos]-$b]
+	uint$b -hex In-file
 }
 
 set hl 0
@@ -23,7 +23,7 @@ if {[len] in {65536 1048576 2097152 4194304} && ![hex 2]} {
 			}
 			lappend t $k
 		}
-		set a 0xFFFFFFFF
+		set a 16**8-1
 		while {[pos]-[len]+4} {
 			set a [expr $a>>8^[lindex $t [expr [uint8]^$a&255]]]
 		}
@@ -38,7 +38,7 @@ if {[len] in {65536 1048576 2097152 4194304} && ![hex 2]} {
 		}
 	}
 	Checksum $hl 8
-	Current 4
+	Current 32
 	return
 }
 goto 0
@@ -54,7 +54,7 @@ switch [len] {
 		}
 		Checksum $hl 4 " 1.5K-"
 		Checksum -$hl2 4 " 1.6K+"
-		Current 2
+		Current 16
 	}
 	49152 { # TI-80
 		goto 16384
@@ -63,7 +63,7 @@ switch [len] {
 		}
 		Checksum $hl 4
 		goto -2
-		Current 2
+		Current 16
 	}
 	131072 - 262144 { # TI-8[2356]
 		while {![end]} {

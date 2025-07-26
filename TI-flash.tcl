@@ -123,8 +123,7 @@ proc readTIHex {} {
 		entry	"Address" [format %04X $address] 4 [expr [pos]-4]
 
 		set	type [readAsciiHex]
-		#entry	"Field type" $type 2 [expr [pos]-2]
-		entryd	"Field type" $type 2 [dict create 0 Data 1 End 2 Page]
+		entryd	"Record type" $type 2 [dict create 0 Data 1 EOF 2 Page]
 		if {!$type} {sectioncollapse}
 
 		if {$size != 0} {

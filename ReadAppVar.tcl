@@ -191,27 +191,11 @@ proc ReadAppVar {datasize} {
 		hex	4 "Study cards"
 		uint16l	"Version"
 		section Flags {
-			proc FlagRead {Flag bit {name reserved} {notname -1}} {
-				if {($Flag & (1 << $bit)) == 0} {
-					if {$notname != -1} {
-						entry $notname "" 1 [expr [pos] - 1]
-					}
-				} else {
-					entry $name "" 1 [expr [pos] - 1]
-				}
-			}
 			set	Flags [format "0x%04X" [uint16]]
-			move	-1
 			sectionvalue $Flags
-			FlagRead $Flags 0 "Use levels" "No levels"
-			FlagRead $Flags 1 "Self-check" "Multiple choice"
-			for {set a 2} {$a<7} {incr a} {
-				FlagRead $Flags $a
-			}
-			set	Flags2 [hex 1]
-			for {set a 0} {$a<7} {incr a} {
-				FlagRead $Flags2 $a
-			}
+			MaskRead $Flags 1 {1 "Use levels" 0 "No levels"} 2
+			MaskRead $Flags 2 {1 "Self-check" 0 "Multiple choice"} 2
+			MaskRead $Flags 0xFFFC Unknown/Unused 2
 		}
 
 		section -collapsed "Title text offsets" {
@@ -255,13 +239,13 @@ proc ReadAppVar {datasize} {
 		section Flags {
 			set flags [uint8]
 			# 0 & 1 are exclusive
-			FlagRead $flags 0 "Keep known cards"
-			FlagRead $flags 1 "Re-introduce cards"
-			FlagRead $flags 2 "Shuffle cards"
-			FlagRead $flags 3 "Ignore levels"
-			FlagRead $flags 4 "Animate flip"
-			FlagRead $flags 5 "5 Box mode"
-			foreach a {6 7} { FlagRead $flags $a }
+			MaskRead $flags 1 {1 "Keep known cards" 0 "Remove known cards"}
+			MaskRead $flags 2 {1 "Reintroduce cards" 0 "Do not reintroduce cards"}
+			MaskRead $flags 4 {1 "Shuffle cards" 0 "Do not shuffle cards"}
+			MaskRead $flags 8 {1 "Ignore levels" 0 "Use levels"}
+			MaskRead $flags 16 {1 "Animate flip" 0 "Do not animate flip"}
+			MaskRead $flags 32 {1 "5 Box mode" 0 "not 5 box mode"}
+			MaskRead $flags 192 Unknown
 		}
 		ascii	9 "Current AppVar"
 	} elseif {$head in {"\xf3\x47\xbf\xaa" "\xf3\x47\xbf\xab"}} {
@@ -270,11 +254,11 @@ proc ReadAppVar {datasize} {
 		ascii	8 Name
 		section Flags {
 			sectionvalue [set flags [hex 1]]
-			FlagRead $flags 0 "Unknown"
-			FlagRead $flags 1 "Unknown"
-			FlagRead $flags 2 "Don't display help" "Display help"
-			FlagRead $flags 3 "Display equation evaluation in editor preview" "Display equation in editor preview"
-			foreach a {4 5 6 7} { FlagRead $flags $a "Unused"}
+			MaskRead $flags 1 Unknown
+			MaskRead $flags 2 Unknown
+			MaskRead $flags 4 {1 "Don't display help" 0 "Display help"}
+			MaskRead $flags 8 {1 "Display equation evaluation in editor preview" 0 "Display equation in editor preview"}
+			# 0xF0 unused
 		}
 		# mask 8
 		hex	1 Number

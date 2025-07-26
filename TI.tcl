@@ -20,7 +20,7 @@
 
 variable CurDir [file dirname [file normalize [info script]]]
 
-if {[info command hf_min_version_required] ne ""} {
+if {[info comm hf_min_version_required] ne ""} {
 	hf_min_version_required 2.17
 } else {
 	puts stderr "Template must be used in HexFiend"
@@ -96,11 +96,18 @@ proc entryd {a b c d} {
 	return	$e
 }
 
-proc FlagRead {f b {s Unused/Unknown} {u ""}} {
-	set a [expr {$f>>$b&1?$s:$u}]
-	if {$a!=""} {
-		entry Bit\ $b $a 1 [expr [pos]-1]
+# value mask dict ?bytes?
+proc MaskRead {f b s {a 1}} {
+	set d Mask\ [format 0x%0[expr $a*2]X $b]
+	set f [format 0x%0[expr $a*2]X [expr $b&$f]]
+	if {($b&-$b)==$b} {
+		set d Bit\ [expr (0x439268C15A7DBEF0>>(4*((0x9AF0/$b)&15)))&15]
+		set f [expr $f?1:0]
 	}
+	if [expr [llength $s]==1] {
+		set s [dict create $f $s]
+	}
+	entryd $d $f $a $s
 }
 
 proc whiless {a b} {
@@ -259,12 +266,13 @@ proc ReadVer {} {
 	set	Vers [dict create \
 		0x01 $s 0x02 "$s 1.15+" 0x03 "$s 1.16+" \
 		0x04 $t 0x05 "$t 2.30+" 0x06 "$t 2.53MP+" 0x07 "$t 2.55MP+" \
-		0x0A "$t CSE+" 0x0B "$t CE 5.0-5.2+" 0x0C "$t CE 5.3+" \
+		0x0A "$t CSE+" \
+		0x0B "$t CE 5.0-5.2+" 0x0C "$t CE 5.3+" \
 		0x10 Exact 0x11 Python]
 	section -collapsed Version {
 		set	v [format 0x%02X [expr [set F [hex 1]]&223]]
 		set	r [entryd Version $v 1 $Vers]
-		FlagRead $F 5 Requires\ RTC
+		MaskRead $F 32 {0 Does\ not\ require\ RTC 1 Requires\ RTC}
 		sectionvalue $F[expr {$r!=$v||$F&32?" ([expr {$r!=$v?"$r[expr {$F&32?", ":""}]":""}][expr $F&32?"RTC":""])":""}]
 	}
 }
@@ -297,7 +305,9 @@ proc read85Numb {{index ""}} {
 				sectionvalue $Flags\ (Undefined)
 			} else {
 				sectionvalue $Flags\ ([entryd "Type" $type 1 $85typeDict])
-				FlagRead $Flags 7 Negative\ Float Positive\ Float
+				MaskRead $Flags 32 Unknown
+				MaskRead $Flags 64 {1 "Used in last graph" 0 "Not used in last graph"}
+				MaskRead $Flags 128 {1 Negative 0 Positive}
 			}
 		}
 		# all flags set means undefined; unclear if exclusive to Diff GDB
@@ -336,7 +346,8 @@ proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 			set	Flags [hex 1]
 			set	type [format "0x%02X" [expr $Flags & 63]]
 			sectionvalue $Flags\ ([entryd "Type" $type 1 $Z80typeDict])
-			FlagRead $Flags 7 Negative\ Float Positive\ Float
+			MaskRead $Flags 64 {1 "Used in last graph" 0 "Not used in last graph"}
+			MaskRead $Flags 128 {1 Negative 0 Positive}
 		}
 		if {$type in {0x1C 0x1D}} {
 			set	Body [hex 8 Body]
@@ -373,17 +384,18 @@ proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 	if ![hex 9] {
 		entry Real DNE 9 [expr [pos]-9]
 		sectionvalue DNE
-	} elseif {($a&0x7F) in {20 21 22 23 24} && $magic == "**TI73**"} {
+	} elseif {($a&63) in {20 21 22 23 24} && $magic == "**TI73**"} {
 		move	-8
 		section -collapsed "Flags" {
 			set	type [format "0x%02X" [expr $a & 63]]
-			sectionvalue $a\ ([entryd "Type" $a 1 $73typeDict])
-			FlagRead $a 7 Negative Positive
+			sectionvalue $a\ ([entryd "Type" $type 1 $73typeDict])
+			MaskRead $a 64 {1 "Used in last graph" 0 "Not used in last graph"}
+			MaskRead $a 128 {1 Negative 0 Positive}
 		}
 		set	Body [hex 8 Body]
 		set	sign [expr $a & 128?"-":""]
 		set	den [string range $Body 12 15]
-		switch [expr $a & 127] {
+		switch [expr $a & 63] {
 			20 -
 			22 {
 				set	n "$sign[string range $Body 4 9]/$den"
@@ -420,34 +432,30 @@ proc readGDB {} {
 	section "Format flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
-		FlagRead $Flags 0 MonoDot MonoConnected
-		FlagRead $Flags 1 Simul Sequential
-		FlagRead $Flags 2 GridOn GridOff
-		FlagRead $Flags 3 PolarGC RectGC
-		FlagRead $Flags 4 CoordOff CoordOn
-		FlagRead $Flags 5 AxesOff AxesOn
-		FlagRead $Flags 6 LabelOn LabelOff
-		FlagRead $Flags 7 GridLine GridDot
+		MaskRead $Flags 1 {1 MonoDot 0 MonoConnected}
+		MaskRead $Flags 2 {1 Simul 0 Sequential}
+		MaskRead $Flags 4 {1 GridOn 0 GridOff}
+		MaskRead $Flags 8 {1 PolarGC 0 RectGC}
+		MaskRead $Flags 16 {1 CoordOff 0 CoordOn}
+		MaskRead $Flags 32 {1 AxesOff 0 AxesOn}
+		MaskRead $Flags 64 {1 LabelOn 0 LabelOff}
+		MaskRead $Flags 128 {1 GridLine 0 GridDot}
 	}
 	section "Sequence flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
-		entryd	Bits\ 0-4 [expr $Flags & 31] 1 [dict create 0 Time 1 Web 2 VertWeb 4 uv 8 vw 16 uw]
-		FlagRead $Flags 5 Unknown
-		foreach a {6 7} {
-			FlagRead $Flags $a Unused
-		}
+		MaskRead $Flags 0x1D {0x00 Time 0x01 Web 0x04 uv 0x08 vw 0x10 uw}
+		MaskRead $Flags 0x02 {0 !WebVert 1 WebVert}
+		MaskRead $Flags 0x20 Unknown
+		# 0xC0 Unused
 	}
 	if $isn82 {
 		section "Extended settings" {
 			set	Flags [hex 1]
 			sectionvalue $Flags
-			FlagRead $Flags 0 ExprOff ExprOn
-			set	seqmode [expr $Flags >> 1 & 3]
-			entry	Bits\ 1&2 "SEQ([expr $seqmode?"n+$seqmode":"n"])" 1 [expr [pos]-1]
-			foreach a {3 4 5 6 7} {
-				FlagRead $Flags $a Unused
-			}
+			MaskRead $Flags 1 {1 ExprOff 0 ExprOn}
+			MaskRead $Flags 6 {0x00 SEQ(n) 0x02 SEQ(n+1) 0x04 SEQ(n+2) 0x06 SEQ(n+3)}
+			# 0xF8 Unused
 		}
 	}
 
@@ -486,9 +494,9 @@ proc readGDB {} {
 				set	Flags [hex 1]
 				sectionvalue "$Flags - [expr $Flags & 32?"S":"Uns"]elected"
 				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $Z80typeDict
-				FlagRead $Flags 5 Selected Unselected
-				FlagRead $Flags 6 "Was used for graph"
-				FlagRead $Flags 7 "Link transfer flag"
+				MaskRead $Flags 32 {1 Selected 0 Unselected}
+				MaskRead $Flags 64 {1 "Used in last graph" 0 "Not used in last graph"}
+				MaskRead $Flags 128 {1 "Link transfer flag" 0 "!Link transfer flag"}
 			}
 			BAZIC83	[len_field Code]
 		}
@@ -514,10 +522,8 @@ proc readGDB {} {
 		section "Extended settings 2" {
 			set	Flags [hex 1]
 			sectionvalue $Flags
-			FlagRead $Flags 0 "Detect Asymptotes Off" "Detect Asymptotes On"
-			foreach a {1 2 3 4 5 6 7} {
-				FlagRead $Flags $a Unused
-			}
+			MaskRead $Flags 1 {1 "Detect Asymptotes Off" 0 "Detect Asymptotes On"}
+			# & 0xFE unused
 		}
 		endsection
 	}
@@ -528,14 +534,14 @@ proc read85GDB {type {magic "**TI86**"}} {
 	section "Format flags" {
 		set	Flags [hex 1]
 		sectionvalue $Flags
-		FlagRead $Flags 0 DrawDot DrawLine
-		FlagRead $Flags 1 SimulG SeqG
-		FlagRead $Flags 2 GridOn GridOff
-		FlagRead $Flags 3 PolarGC RectGC
-		FlagRead $Flags 4 CoordsOff CoordsOn
-		FlagRead $Flags 5 AxesOff AxesOn
-		FlagRead $Flags 6 LabelOn LabelOff
-		FlagRead $Flags 7 86GDB 85GDB
+		MaskRead $Flags 1 {1 DrawDot 0 DrawLine}
+		MaskRead $Flags 2 {1 SimulG 0 SeqG}
+		MaskRead $Flags 4 {1 GridOn 0 GridOff}
+		MaskRead $Flags 8 {1 PolarGC 0 RectGC}
+		MaskRead $Flags 16 {1 CoordsOff 0 CoordsOn}
+		MaskRead $Flags 32 {1 AxesOff 0 AxesOn}
+		MaskRead $Flags 64 {1 LabelOn 0 LabelOff}
+		MaskRead $Flags 128 {1 86GDB 0 85GDB}
 		set	GDB86 [expr $Flags >> 7]
 	}
 	set	StyleCount 100
@@ -560,12 +566,9 @@ proc read85GDB {type {magic "**TI86**"}} {
 				section "Differential flags" {
 					set	Flags [hex 1]
 					sectionvalue $Flags
-					entryd	Bits\ 0-2 [expr $Flags & 7] 1 [dict create 1 SlpFld 2 DirFld 4 FldOff]
-					FlagRead $Flags 3 Unknown
-					FlagRead $Flags 4 Unknown
-					FlagRead $Flags 5 Euler RK
-					FlagRead $Flags 6 Unknown
-					FlagRead $Flags 7 Unknown
+					MaskRead $Flags 0x07 {0x01 SlpFld 0x02 DirFld 0x04 FldOff}
+					MaskRead $Flags 0x20 {1 Euler 0 RK}
+					MaskRead $Flags 0xD8 Unknown
 				}
 			}
 			set	numbs "difTol tPlot tMin tMax tStep $numbs"
@@ -593,7 +596,7 @@ proc read85GDB {type {magic "**TI86**"}} {
 			set	equid [expr $Flags & 127]
 			entry	ID $equid 1 [expr [pos]-1]
 			sectionvalue "$EquPrfx$equid - [expr $Flags & 0x80?"S":"Uns"]elected"
-			FlagRead $Flags 7 Selected Unselected
+			MaskRead $Flags 128 {1 Selected 0 Unselected}
 		}
 		sectionname $EquPrfx$equid
 		switch -- $type {
@@ -908,10 +911,10 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 
 proc getNameZ80 {title type length {magic ""}} {
 	variable CurDir
-	set	start [pos]
-	set bint BAZIC83
+	set start [pos]
+	set bint BAZIC83_GetToken
 	if {$magic == "**TI73**"} {
-		set bint BAZIC73
+		set bint BAZIC73_GetToken
 		if {$type==0x1A} {
 			set type 0x15
 		}
@@ -921,19 +924,19 @@ proc getNameZ80 {title type length {magic ""}} {
 			incr type 4
 		}
 	}
-	if {[file exists [file join $CurDir BAZIC $bint.tcl]]} {
+	if {[info comm $bint] ne ""} {
 		switch -- $type {
 			0x01 -
 			0x0D {
 				int8
-				set	a [hex 1]
-				move	-2
+				set a [hex 1]
+				move -2
 				if {$a < 6} {
-					set	name [$bint\_GetToken [hex 1]]
+					set name [$bint [hex 1]]
 				} elseif {($a == 0x40) && $magic in {"**TI73**" "**TI83F*"}} {
-					set	name "|LIDList"
+					set name "|LIDList"
 				} else {
-					set	name [string map {[ θ ] |L} [ascii $length]]
+					set name [string map {[ θ ] |L} [ascii $length]]
 				}
 			}
 			0x05 -
@@ -942,30 +945,30 @@ proc getNameZ80 {title type length {magic ""}} {
 			0x17 -
 			0x26 {
 				# crude font mapping
-				set	name [string map {[ θ} [ascii $length]]
+				set name [string map {[ θ} [ascii $length]]
 			}
 			0x0F -
 			0x10 -
 			0x11 {
 				array set r {0x0F Window 0x10 RclWindow 0x11 TblSet}
-				set	name [ascii $length]
-				set	name [expr {$name==""?$r($type):"$name ($r($type))"}]
+				set name [ascii $length]
+				set name [expr {$name==""?$r($type):"$name ($r($type))"}]
 			}
 			0x1A {
 				# first name byte should be 03Ch
 				# then should be 0EF50h + [uint8], but no arbitrary detok
 				int8
-				set	name Image[expr ([uint8]+1)%10]
+				set name Image[expr ([uint8]+1)%10]
 			}
-			default { set name [$bint\_GetToken [hex 1]] }
+			default { set name [$bint [hex 1]] }
 		}
 	} else {
-		set	name [string map {[ θ ] |L} [ascii $length]]
+		set name [string map {[ θ ] |L} [ascii $length]]
 	}
-	goto	$start
-	entry	$title $name $length [pos]
-	move	$length
-	return	$name
+	goto $start
+	entry $title $name $length [pos]
+	move $length
+	return $name
 }
 
 proc SysTab {size magic} {
@@ -982,19 +985,17 @@ proc SysTab {size magic} {
 		set	typename [entryd "Type" $type 1 $Z80typeDict]
 		sectionvalue $Flags\ ($typename)
 		if {($Flags & 23) == 3} {
-			FlagRead $Flags 5 "Selected Z80" "Unselected Z80"
+			MaskRead $Flags 32 {1 "Selected Z80" 0 "Unselected Z80"}
 		}
-		FlagRead $Flags 6 "Was used for graph"
+		MaskRead $Flags 64 {1 "Used in last graph" 0 "Not used in last graph"}
 		# always reset
-		FlagRead $Flags 7 "Link transfer flag"
+		MaskRead $Flags 128 {1 "Link transfer flag" 0 "!Link transfer flag"}
 	}
 	section -collapsed Reserved {
 		set	Flags [hex 1]
 		sectionvalue $Flags
-		FlagRead $Flags 0 "Selected eZ80" "Unselected eZ80"
-		foreach a {1 2 3 4 5 6 7} {
-			FlagRead $Flags $a
-		}
+		MaskRead $Flags 1 {1 "Selected eZ80" 0 "Unselected eZ80"}
+		MaskRead $Flags 254 Unknown
 	}
 	ReadVer
 	# unused garbage in groups
@@ -1174,21 +1175,26 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 	endsection
 	CheckSum 55 [pos]
 } elseif {$magic=="**TI81**"} {
-	hex	2 "Thing"
-	set	size [len_field Code]
-	set	name ""
-	# simplified detok
-	for_n 8 {
-		set	a [uint8]
-		set	name $name[format %c [expr $a<86?$a+32:$a==115?952:$a>86?$a-24:20]]
+	set type [hex 2]
+	entryd "Type" $type 2 {0x000B MEM 0x006E PRGM}
+	if {$type == 0x6E} {
+		set size [len_field Code]
+		set name ""
+		# simplified detok
+		for_n 8 {
+			set a [uint8]
+			set name $name[format %c [expr $a<86?$a+32:$a==115?952:$a>86?$a-24:20]]
+		}
+		entry Name $name 8 [expr [pos]-8]
+		BAZIC81 $size
+		CheckSum 12 [pos]
+	} elseif {$type == 0xB} {
+		bytes 8182 Data
 	}
-	entry	Name $name 8 [expr [pos]-8]
-	BAZIC81 $size
-	CheckSum 12 [pos]
 } elseif {[string range $magic 0 3]=="PK\x03\x04"} {
 	# Bundles include a _CHECKSUM file with the sum of CRC32 of all files (lowercase, not zero-padded, ends with CRLF)
 	# and a METADATA file with various info
-	move	-8
+	move -8
 	include archives/zip.tcl
 } else {
 	requires 0 0

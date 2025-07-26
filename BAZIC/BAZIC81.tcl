@@ -267,5 +267,12 @@ proc BAZIC81 {size} {
 				entry "Line $e" $line [expr [pos]-$Linestart] $Linestart
 			}
 		}
+
+
+
+
+
+
 	}
+	
 }

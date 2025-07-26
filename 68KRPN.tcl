@@ -985,12 +985,12 @@ proc Recursive_RPN {{parent_precedence 15}} {
 			section "Flags" {
 				set Flags [hex 1]
 				sectionvalue $Flags
-				entryd Bits\ 0-2 [expr $Flags & 7] 1 [dict create 0 Line 1 Dot 2 Thick\ line 3 Animate 4 Path 5 Shade\ above 6 Shade\ below 7 Square]
-				FlagRead $Flags 3 Untokenized Tokenized
-				FlagRead $Flags 4 Unknown ;# function?
-				FlagRead $Flags 5 Unknown
-				FlagRead $Flags 6 "Graph 1 plot on" "Graph 1 plot off"
-				FlagRead $Flags 7 "Graph 2 plot on" "Graph 2 plot off"
+				MaskRead $Flags 7 [dict create 0x00 Line 0x01 Dot 0x02 Thick\ line 0x03 Animate 0x04 Path 0x05 Shade\ above 0x06 Shade\ below 0x07 Square]
+				MaskRead $Flags 8 {1 Untokenized 0 Tokenized}
+				MaskRead $Flags 16 Unknown ;# {1 function}?
+				MaskRead $Flags 32 Unknown
+				MaskRead $Flags 64 {1 "Graph 1 plot on" 0 "Graph 1 plot off"}
+				MaskRead $Flags 128 {1 "Graph 2 plot on" 0 "Graph 2 plot off"}
 			}
 
 			move -3
@@ -1116,24 +1116,22 @@ proc Recursive_RPN {{parent_precedence 15}} {
 				section "Format flags" {
 					set Flags [hex 2]
 					sectionvalue $Flags
-					FlagRead $Flags 0 "Coordinates: Polar" "Coordinates: Rect"
-					FlagRead $Flags 1 "Leading Cursor: On" "Leading Cursor: Off"
-					FlagRead $Flags 2 "Labels: On" "Labels: Off"
-					FlagRead $Flags 3 "3D Axes: Box" "3D Axes: Axes"
-					FlagRead $Flags 4 "Axes: Off" "Axes: On"
-					FlagRead $Flags 5 "Grid: On" "Grid: Off"
-					FlagRead $Flags 6 "Graph Order: Simul" "Graph Order: Seq"
-					FlagRead $Flags 7 "Coordinates: Off" "Coordinates: On"
-					move -1
-					FlagRead $Flags 8 "Style: Wire Frame" "Style: Hidden Surface"
-					FlagRead $Flags 9
-					FlagRead $Flags 10 "Discontinuity Detection: Off" "Discontinuity Detection: On"
-					FlagRead $Flags 11 "3D view expanded" "3D view not expanded"
-					FlagRead $Flags 12
+					MaskRead $Flags 0x01 { 1 "Coordinates: Polar" 0 "Coordinates: Rect"} 2
+					MaskRead $Flags 0x02 { 1 "Leading Cursor: On" 0 "Leading Cursor: Off"} 2
+					MaskRead $Flags 0x04 { 1 "Labels: On" 0 "Labels: Off"} 2
+					MaskRead $Flags 0x08 { 1 "3D Axes: Box" 0 "3D Axes: Axes"} 2
+					MaskRead $Flags 0x10 { 1 "Axes: Off" 0 "Axes: On"} 2
+					MaskRead $Flags 0x20 { 1 "Grid: On" 0 "Grid: Off"} 2
+					MaskRead $Flags 0x40 { 1 "Graph Order: Simul" 0 "Graph Order: Seq"} 2
+					MaskRead $Flags 0x80 { 1 "Coordinates: Off" 0 "Coordinates: On"} 2
+					MaskRead $Flags 0x0100 {1 "Style: Wire Frame" 0 "Style: Hidden Surface"} 2
+					MaskRead $Flags 0x0200 Unknown 2
+					MaskRead $Flags 0x0400 {1 "Discontinuity Detection: Off" 0 "Discontinuity Detection: On"} 2
+					MaskRead $Flags 0x0800 {1 "3D View Expanded" 0 "3D View Not Expanded"} 2
+					MaskRead $Flags 0x1000 Unknown 2
 					# Sequence flags
-					FlagRead $Flags 13 "Build web: Auto" "Build web: Trace"
-					entryd Bits\ 14-15 [expr ($Flags & 0xC000) >> 14] 1 [dict create 0 "Axes: Custom" 1 "Axes: Web" 2 "Axes: Time" 3 "Axes: ~Time"]
-					move 1
+					MaskRead $Flags 0x2000 {1 "Build web: Auto" 0 "Build web: Trace"} 2
+					MaskRead $Flags 0xC000 [dict create 0x0000 "Axes: Custom" 0x4000 "Axes: Web" 0x8000 "Axes: Time" 0xC000 "Axes: ~Time"] 2
 				}
 				foreach axis {X Y} {
 					set a [int8]
@@ -1156,13 +1154,10 @@ proc Recursive_RPN {{parent_precedence 15}} {
 				section "Differential flags" {
 					set Flags [hex 2]
 					sectionvalue $Flags
-					FlagRead $Flags 0 "EULER" "RK"
-					entryd Bits\ 1-2 [expr $Flags & 6] 1 [dict create 0 FLDOFF 2 DIRFLD 4 SLPFLD 6 ~SLPFLD]
-					FlagRead $Flags 3
-					FlagRead $Flags 4 "Custom Axes" "Uncustom Axes"
-					foreach a {5 6 7} {
-						FlagRead $Flags $a
-					}
+					MaskRead $Flags 1 {1 "EULER" 0 "RK"} 2
+					MaskRead $Flags 6 [dict create 0x0000 FLDOFF 0x0002 DIRFLD 0x0004 SLPFLD 0x0006 ~SLPFLD] 2
+					MaskRead $Flags 16 {1 "Custom Axes" 0 "Uncustom Axes"} 2
+					MaskRead $Flags 0xFFE8 Unknown 2
 				}
 				entryd Style\ 3D [hex 1] 1 [dict create 0x00 Wire\ Frame 0x01 Hidden\ Surface 0x02 Contour\ Levels 0x03 "Wire and Contour" 0x04 Implicit\ Plot]
 				hex 1 unknown
@@ -1197,11 +1192,9 @@ proc Recursive_RPN {{parent_precedence 15}} {
 						section "Table flags" {
 							set Flags [hex 1]
 							sectionvalue $Flags
-							foreach a {0 1 2 3 4 5} {
-								FlagRead $Flags $a
-							}
-							FlagRead $Flags 6 "Independent: Ask" "Independent: Auto"
-							FlagRead $Flags 7 "Graph <-> Table: On" "Graph <-> Table: Off"
+							MaskRead $Flags 63 Unknown
+							MaskRead $Flags 64 {1 "Independent: Ask" 0 "Independent: Auto"}
+							MaskRead $Flags 128 {1 "Graph <-> Table: On" 0 "Graph <-> Table: Off"}
 						}
 						foreach num {tblStart Deltatbl} {
 							entry $num [read68KNumb] 10 [expr [pos]-10]

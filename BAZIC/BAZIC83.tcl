@@ -263,7 +263,7 @@ set	BAZIC_5C [dict create\
 	0x07 "\[H]" \
 	0x08 "\[I]" \
 	0x09 "\[J]" \
-	default "Matr" \
+	prefix "Matr" \
 ]
 
 set	BAZIC_5D [dict create\
@@ -273,7 +273,7 @@ set	BAZIC_5D [dict create\
 	0x03 "L4" \
 	0x04 "L5" \
 	0x05 "L6" \
-	default "List" \
+	prefix "List" \
 ]
 
 set	BAZIC_5E [dict create\
@@ -308,7 +308,7 @@ set	BAZIC_5E [dict create\
 	0x80 "|u" \
 	0x81 "|v" \
 	0x82 "|w" \
-	default "Equ" \
+	prefix "Equ" \
 ]
 
 set	BAZIC_60 [dict create \
@@ -322,7 +322,7 @@ set	BAZIC_60 [dict create \
 	0x07 "Pic8" \
 	0x08 "Pic9" \
 	0x09 "Pic0" \
-	default "Pic" \
+	prefix "Pic" \
 ]
 
 set	BAZIC_61 [dict create \
@@ -336,7 +336,7 @@ set	BAZIC_61 [dict create \
 	0x07 "GDB8" \
 	0x08 "GDB9" \
 	0x09 "GDB0" \
-	default "GDB"\
+	prefix "GDB"\
 ]
 
 set	BAZIC_62 [dict create \
@@ -495,7 +495,7 @@ set	BAZIC_AA [dict create \
 	0x07 "Str8" \
 	0x08 "Str9" \
 	0x09 "Str0" \
-	default "Str"\
+	prefix "Str"\
 ]
 
 set	BAZIC_BB [dict create \
@@ -863,8 +863,8 @@ set	BAZIC_EF [dict create \
 		if [dict exists $b $a] {
 			return [dict get $b $a]
 		} elseif {$c ne ""} {
-			if [dict exists $b default] {
-				set c [dict get $b default]
+			if [dict exists $b prefix] {
+				set c [dict get $b prefix]
 			} else {
 				return [format "\\u%02X%02X" $c $a]
 			}
