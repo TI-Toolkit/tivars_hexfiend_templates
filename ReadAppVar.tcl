@@ -50,8 +50,6 @@ proc ReadAppVar {datasize} {
 	}
 
 	if {$head in {"PYCD" "PYSC"}} {
-		section	-collapsed "Data"
-
 		ascii	4 "Python"
 		set	namesize [hex 1 "Name length"]
 		if {$namesize} {
@@ -63,10 +61,8 @@ proc ReadAppVar {datasize} {
 			incr	datasize -5
 		}
 		readByLine $datasize
-		endsection
 	} elseif {$head == "PYMP"} {
 		#https://github.com/commandblockguy/tipycomp/blob/main/format.txt
-		section	-collapsed "Data"
 		ascii	4 "Python module"
 		incr	datasize -4
 		set	length [uleb128 "Length"]
@@ -77,10 +73,8 @@ proc ReadAppVar {datasize} {
 		readByLine $length
 		incr	datasize [expr $offset-[pos]]
 		bytes	$datasize "Compiled module"
-		endsection
 	} elseif {$head == "IM8C"} {
 		#https://github.com/TI-Planet/img2calc/blob/4d5599177229c18f0e28b12f90b881bb09f78b77/index.html#L1153-L1213
-		section	-collapsed "Data"
 		set	start [pos]
 		ascii	4 "Python image"
 		entry	Width [expr [uint8]+256*[uint8]+256*256*[uint8]] 3 [expr [pos]-3]
@@ -107,7 +101,6 @@ proc ReadAppVar {datasize} {
 			}
 		}
 		bytes	[expr $start+$datasize-[pos]] "RLE image data"
-		endsection
 	} elseif {$head == "\xf3\x47\xbf\xa7"} {
 		#Credit to Zeroko
 		#https://www.ticalc.org/archives/files/fileinfo/477/47772.html
@@ -142,9 +135,12 @@ proc ReadAppVar {datasize} {
 			for_n $items {
 				ReadCardItem
 			}
+			# not always present and not accessed
 			if {[uint8]==80} {
 				move	-1
-				hex	[expr 1+$items] "Unknown"
+				# bit 0: Line is continuing previous line?
+				hex [expr $items] "Line Flags"
+				hex 1 Unknown
 			} else {
 				move	-1
 			}
@@ -164,8 +160,8 @@ proc ReadAppVar {datasize} {
 			}
 			endsection
 		}
-		proc ReadCard {Flags} {
-			section -collapsed "Card"
+		proc ReadCard {Flags number} {
+			section -collapsed "Card $number"
 			set	start [pos]
 			set	cardsides [uint16l "Card front offset"]
 			lappend	cardsides [uint16l "Card back offset"]
@@ -185,8 +181,6 @@ proc ReadAppVar {datasize} {
 			endsection
 		}
 
-		section	-collapsed "Data"
-
 		set	start [pos]
 		hex	4 "Study cards"
 		uint16l	"Version"
@@ -200,9 +194,22 @@ proc ReadAppVar {datasize} {
 
 		section -collapsed "Title text offsets" {
 			for {set a 0} {$a < 4} {incr a} {
-				set	title($a) [uint16l "Title offset $a"]
+				set title($a) [uint16l "Offset $a"]
 			}
 		}
+
+		set r [pos]
+		#fix highlighting because section is dumb
+		goto	$start
+		move	$title(0)
+		section "Title strings" {
+			for {set a 0} {$a < 4} {incr a} {
+				goto $start
+				move $title($a)
+				cstr ascii "String $a"
+			}
+		}
+		goto $r
 
 		if {[expr 1&$Flags]} {
 			uint8	"Level count"
@@ -213,27 +220,15 @@ proc ReadAppVar {datasize} {
 		set	cardcount [uint8 "Number of cards"]
 		section -collapsed "Card offsets" {
 			for {set a 0} {$a < $cardcount} {incr a} {
-				lappend cards [uint16l "offset to card"]
+				lappend cards [uint16l "Offset $a"]
 			}
 		}
 
-		#fix highlighting because section is dumb
-		goto	$start
-		move	$title(0)
-		section "Title texts" {
-			for {set a 0} {$a < 4} {incr a} {
-				goto	$start
-				move	$title($a)
-				cstr	ascii "Title string $a"
-			}
+		for {set a 0} {$a < $cardcount} {incr a} {
+			goto $start
+			move [lindex $cards $a]
+			ReadCard $Flags $a
 		}
-
-		foreach a $cards {
-			goto	$start
-			move	$a
-			ReadCard $Flags
-		}
-		endsection
 	} elseif {$head == "\xf3\x47\xbf\xa8"} {
 		hex	4 "Study cards settings"
 		section Flags {
@@ -249,9 +244,9 @@ proc ReadAppVar {datasize} {
 		}
 		ascii	9 "Current AppVar"
 	} elseif {$head in {"\xf3\x47\xbf\xaa" "\xf3\x47\xbf\xab"}} {
-		section -collapsed "Data"
 		hex	4 CelSheet
 		ascii	8 Name
+		# stored in (iy+$30)
 		section Flags {
 			sectionvalue [set flags [hex 1]]
 			MaskRead $flags 1 Unknown
@@ -287,15 +282,17 @@ proc ReadAppVar {datasize} {
 				endsection
 			}
 			move	-1
-			uint8	Cell
+			# Cell NULL is the end of the cells
+			uint8	"End of Cells"
 			if [uint8] {
 				move	-1
-				hex	2 4C08
-				hex	6 001FF8000000
+				# if this is not 4C08 then insert 2C bytes (number of bytes following)
+				hex	2 Magic\ 4C08
+				hex	6 "001F F800 0000"
 				# bottom three bits are moved to D0EB10 conditional on something and Flags bit 3
 				hex	2 Unknown
-				hex	6 001FF8000000
-				hex	6 001FF8000000
+				hex	6 "001F F800 0000"
+				hex	6 "001F F800 0000"
 				hex	22 Datas
 				hex	2 Unknown
 			} else {
@@ -303,36 +300,33 @@ proc ReadAppVar {datasize} {
 				hex	2 Nulls
 			}
 		}
-		endsection
 	} elseif {$head == "CaJu"} {
-		section -collapsed "Data"
-		hex	4 CabriJr
+		hex 4 CabriJr
 		set type [entryd Type [ascii 1] 1 "f File l Language"]
 		if {$type == "File"} {
-			set	struct [hex 1]
+			set struct [hex 1]
 			if {$struct==0x04} {
-				entry	Structure 4\ (Uncompressed) 1 [expr [pos]-1]
-				hex	1 Unknown
-				uint16	Unknown
-				hex	1 Unknown
-				set	n [uint8]
-				entry	"offset to name" [expr 21*$n] 1 [expr [pos]-1]
-				hex	[expr $datasize-11] Data
-			} else {
-				entry	Structure $struct\ (Compressed) 1 [expr [pos]-1]
-				# if Number==4 && Number2==90h: Type=66h
-				hex	1 Unread
-				set	n [hex 1] ;# needs neg if bit 7
-				entry	$n [format "0x%04X" [expr 2*$n+36]] 1 [expr [pos]-1]
-				set	e [hex 1]
-				entry	$e [format "0x%04X" [expr 2*$e+18]] 1 [expr [pos]-1]
-				# each block is 18 bytes
-				set	n [uint8 "Block count"]
+				entry Structure 4\ (Uncompressed) 1 [expr [pos]-1]
+				hex 1 Unknown
+				uint16 Cursor\ X
+				uint8 Cursor\ Y
+				set n [uint8 "Block count"]
 				for {set a 0} {$a < $n} {incr a} {
-					hex	18 Block\ $a
+					hex 21 Block\ $a
 				}
-				# hackfix something I don't understand
-				if {$e == 0x20} { uint16 }
+				# cstr
+			} else {
+				entry Structure $struct\ (Compressed) 1 [expr [pos]-1]
+				hex 1 Unread
+				uint8 Maybe\ cursor\ X ;# [expr 2*$n+36]
+				uint8 Maybe\ cursor\ Y ;# [expr 2*$n+18]
+				# each block is 18 bytes
+				set n [uint8 "Block count"]
+				for {set a 0} {$a < $n} {incr a} {
+					hex 18 Block\ $a
+				}
+				# what is this?
+				# if {$e == 0x20} { uint16 }
 			}
 		} elseif {$type == "Language"} {
 			hex 2 "Unknown (0x015F)"
@@ -393,9 +387,7 @@ proc ReadAppVar {datasize} {
 				}
 			}
 		}
-		endsection
 	} elseif {$head == "\xf3\x47\xbf\xaf"} {
-		section -collapsed "Data"
 		set	start [pos]
 		hex	4 NoteFolio
 		hex	4 NULLs
@@ -406,7 +398,6 @@ proc ReadAppVar {datasize} {
 		if {$datasize+$start-[pos] != 0} {
 			bytes	[expr $datasize-[pos]+$start] Unknown
 		}
-		endsection
 	} elseif {$datasize > 0} {
 		bytes	$datasize "Data"
 	} else {

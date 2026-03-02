@@ -1,6 +1,6 @@
 # TI graphing calculator file parser HexFiend template
 # Version 2.0
-# (c) 2021-2025 LogicalJoe
+# (c) 2021-2026 LogicalJoe
 # .types = (
 # .73e, 73d, 73g, 73i, 73l, 73m, 73n, 73p, 73s, 73t, 73v, 73w, 73y, 73z,
 # .82b, 82d, 82g, 82i, 82l, 82m, 82n, 82p, 82s, 82t, 82w, 82y, 82z,
@@ -96,7 +96,7 @@ proc entryd {a b c d} {
 	return	$e
 }
 
-# value mask dict ?bytes?
+# MaskRead value mask dict ?bytes?
 proc MaskRead {f b s {a 1}} {
 	set d Mask\ [format 0x%0[expr $a*2]X $b]
 	set f [format 0x%0[expr $a*2]X [expr $b&$f]]

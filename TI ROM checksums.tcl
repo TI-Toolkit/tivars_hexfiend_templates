@@ -1,6 +1,6 @@
 # TI-ROM checksums HexFiend template
 # Version 2.3
-# (c) 2021-2025 LogicalJoe
+# (c) 2021-2026 LogicalJoe
 
 proc Checksum {a b {c ""}} {
 	entry "Checksum$c" [format 0x%X [expr 16**$b-1&$a]]
@@ -15,7 +15,7 @@ if {[len] in {65536 1048576 2097152 4194304} && ![hex 2]} {
 	big_endian
 	set a [hex 6]
 	goto 0
-	if !($a&0xFF000000FF) {
+	if !($a&0xFF000000FF) { # preprod TI-92
 		for {set i 0} {$i<256} {incr i} {
 			set k $i
 			foreach j {0 1 2 3 4 5 6 7} {
@@ -28,11 +28,11 @@ if {[len] in {65536 1048576 2097152 4194304} && ![hex 2]} {
 			set a [expr $a>>8^[lindex $t [expr [uint8]^$a&255]]]
 		}
 		set hl ~$a
-	} elseif $a&255 {
+	} elseif $a&255 { # 68K boot codes
 		while {[pos]-65532} {
 			incr hl [uint16]
 		}
-	} else {
+	} else { # TI-92 (II)
 		while {[pos]-[len]+4} {
 			incr hl [uint32]
 		}

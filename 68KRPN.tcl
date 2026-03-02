@@ -1,6 +1,6 @@
 # TI 68K RPN parser HexFiend template include
 # Version 2.0
-# (c) 2021-2025 LogicalJoe
+# (c) 2021-2026 LogicalJoe
 # .hidden = true;
 
 proc 68KRPN {dataSize varName} {
@@ -1255,10 +1255,106 @@ proc Recursive_RPN {{parent_precedence 15}} {
 			# TODO: base this on the ID instead of appvar magic (68K-natives might not have this)
 			hex 1 OTH
 			move -2
-			entry Magic [String_68]
+			entry Magic [set a [String_68]]
 			set endLoc [pos]
 			goto $dataStart
-			ReadAppVar [expr $endLoc-[pos]+1]
+			if {$a eq "BOOK"} {
+				# Incomplete. TODO: finish
+				hex 4 Magic\ BEB
+				hex 4 checksum?
+				set headOffset [hex 4 Header\ offset]
+				set metaOffset [hex 4 Meta\ offset]
+				set dataOffset [hex 4 Data\ offset]
+				goto $dataStart
+				move $headOffset
+				section Head {
+					set c [uint32 count]
+					for_n $c {
+						int32 number
+						int16 smaller_number
+					}
+				}
+				goto $dataStart
+				move $metaOffset
+				section Data
+				# flags
+				# bit 0 nz == small font avaliable
+				# bit 1 nz == large font avaliable
+				hex 2 Flags
+				for_n [uint32 Sections] {
+					section ""
+					set a [entryd Section\ ID [int32] 4 {-6 Text -3 Font\ Sizes -4 Something -2 Lines}]
+					sectionname $a
+					hex 4 Magic
+					int32 something
+					hex 8 null
+					set b [uint32 "Offset in data"]
+					set c [uint32 Length]
+					set d [pos]
+					goto $dataStart
+					move $dataOffset
+					move $b
+					if {$a eq "Text"} {
+						set textSection [pos]
+						bytes $c Text
+					} elseif {$a eq "Lines"} {
+						while {$dataStart+$dataOffset+$b+$c>[pos]} {
+							set pageOffsets {}
+							section Text {
+								hex 4 magic?
+								# flags?
+								hex 4 magic\ 2
+								set page_count [uint32 Pages]
+								section -collapsed Page\ offsets {
+									for {set a 0} {$a < $page_count} {incr a} {
+										lappend pageOffsets [uint32 page\ offset]
+									}
+								}
+								set pagesStart [pos]
+								set page 0
+								foreach t $pageOffsets {
+									goto $pagesStart
+									move [lindex $pageOffsets $page]
+									incr page
+									section -collapsed Page\ $page {
+										set count [uint32 line\ count]
+										for_n $count {
+											section -collapsed Line {
+												int32 something
+												int32 something
+												set textStart [uint32 Text\ start]
+												set textEnd [uint32 Text\ end]
+												uint32 Pixel\ row
+												uint16 Width
+												uint16 Height
+												if {$textStart-$textEnd} {
+													set ret [pos]
+													goto $textSection
+													move $textStart
+													sectionvalue [string map $font_map [str [expr $textEnd-$textStart] isolatin1]]
+													goto $ret
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					} else {
+						# font data:
+						# bits: 76543210 S L (font)
+						#       00000000 M M
+						#       00000001 S M
+						#       00000010 M L
+						bytes $c data
+					}
+					goto $d
+					endsection
+				}
+				endsection
+			} else {
+				ReadAppVar [expr $endLoc-[pos]+1]
+			}
 			# sometimes appvars switch endianness
 			big_endian
 		}
