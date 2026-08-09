@@ -1,4 +1,4 @@
-# TI graphing calculator flash file parser HexFiend template
+# TI graphing calculator flash file parser Hex Fiend template
 # Version 1.2
 # (c) 2021-2025 LogicalJoe
 # .hidden = true;
@@ -25,7 +25,7 @@ proc Field_Names {value} {
 		023	{ set x "CE signature" }
 		032	{ set x "Date stamp" }
 		033	{ set x "Certificate parent" }
-		034	{ set x "Exam LED avaliable" }
+		034	{ set x "Exam LED available" }
 		037	{ set x "Minimum installable OS" }
 		040	{ set x "Calculator ID" }
 		041	{ set x "Validation ID" }
@@ -74,7 +74,7 @@ proc Get_Field_Size {value} {
 	}]
 }
 
-# INTEL Intellec 8/MDS [Original from /linkguide/ti83+/fformat.html]
+# Intel Intellec 8/MDS [Original from /linkguide/ti83+/fformat.html]
 #   +--Colon (3A)
 #   | +--Number of data bytes               Line feed (0D0A or 0A)--+
 #   | |  +--Address                        Checksum (256-C&255)--+  |
@@ -87,50 +87,30 @@ proc Get_Field_Size {value} {
 #   : 10 4020 00 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF E0 CR/LF
 #   : 00 0000 01                                                 FF
 
-proc readAsciiHex {{size 1}} {
-	array set HEXConv {
-		0x30	0
-		0x31	1
-		0x32	2
-		0x33	3
-		0x34	4
-		0x35	5
-		0x36	6
-		0x37	7
-		0x38	8
-		0x39	9
-		0x41	10
-		0x42	11
-		0x43	12
-		0x44	13
-		0x45	14
-		0x46	15
+proc readAsciiHex {size {name ""}} {
+	set a [pos]
+	set b 0x[ascii [expr 2*$size]]
+	if {$name ne ""} {
+		entry	$name $b [expr 2*$size] $a
 	}
-	set	number 0
-	for {set a 0} {$a < 2*$size} {incr a} {
-		set	number [expr $number*16+$HEXConv([hex 1])]
-	}
-	return $number
+	return $b
 }
 
 proc readTIHex {} {
-	section "TI-Hex section" {
+	section "TI-Hex record" {
 		uint8
-		set	size [readAsciiHex]
-		entry	"Size" $size 2 [expr [pos]-2]
+		set	size [readAsciiHex 1 Size]
 
-		set	address [readAsciiHex 2]
-		entry	"Address" [format %04X $address] 4 [expr [pos]-4]
+		set	address [readAsciiHex 2 Address]
 
-		set	type [readAsciiHex]
-		entryd	"Record type" $type 2 [dict create 0 Data 1 EOF 2 Page]
+		set	type [readAsciiHex 1]
+		entryd	"Record type" $type 2 [dict create 0x00 Data 0x01 EOF 0x02 Page]
 		if {!$type} {sectioncollapse}
 
 		if {$size != 0} {
-			ascii	[expr 2*$size] "Data"
+			readAsciiHex $size Data
 		}
-		set	checksum [readAsciiHex]
-		entry	"Checksum" [format %02X $checksum] 2 [expr [pos]-2]
+		readAsciiHex 1 Checksum
 	}
 	return	$type
 }
@@ -138,22 +118,22 @@ proc readTIHex {} {
 section	"File packaging" {
 	entry	"Version" "[format %x [uint8]].[format %x [uint8]]" 2 [expr [pos]-2]
 	set	binary [hex 1]
-	entryd	"Binary flag" $binary 1 [dict create 0x00 "Binary" 0x01 "INTEL"]
+	entryd	"Binary flag" $binary 1 [dict create 0x00 "Binary" 0x01 "Intel"]
 	entryd	"Object type" [hex 1] 1 [dict create 0x00 "!Z80" 0x88 "Z80"]
 	hex	4 "Date"
 	entry	"Name" "[uint8],[ascii 8]" 9 [expr [pos]-9]
-	bytes	23 Unused
+	bytes	23 Padding
 	set	a 0
 	set	b [pos]
 	while {[uint8] != 0} {
 		move	-1
 		incr	a
-		entryd	"Owner Calc ID $a" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
+		entryd	"Owner calc ID $a" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
 		entryd	"Type $a" [set vartype [hex 1]] 1 $Z80typeDict
 	}
 	goto	$b
 	move	25
-	entryd	"Owner Prod ID" [hex 1] 1 $ProdIDs
+	entryd	"Owner prod ID" [hex 1] 1 $ProdIDs
 	set	datasize [uint32]
 	entry	"Data size" $datasize 4 [expr [pos]-4]
 }
@@ -189,7 +169,7 @@ proc readExtendedFormat {fieldSize} {
 			while {$main - [pos] + $start} {
 				uint24l	"Hole"
 				set	address [uint24]
-				uint24l	[expr $address >> 22?"Data Base":"Code Base"] [expr $address & 4194303]
+				uint24l	[expr $address >> 22?"Data base":"Code base"] [expr $address & 4194303]
 			}
 		}
 		bytes	[expr $fieldSize-$main] "Body"
@@ -239,7 +219,7 @@ proc getsection {} {
 			} elseif {$field_id == 817} {
 				readExtendedFormat $field_size_2
 			} elseif {$field_id == "090"} {
-				set a [hex 4]
+				set a [uint32]
 				# can't know timezone this was built in
 				# set absoluteTime [expr {[clock scan "1997-01-01" -format "%Y-%m-%d"] + $a}]
 				set date [clock format $a -format "%y/%m/%d, %H:%M:%S"]

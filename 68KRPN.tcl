@@ -1,4 +1,4 @@
-# TI 68K RPN parser HexFiend template include
+# TI 68k RPN parser Hex Fiend template include
 # Version 2.0
 # (c) 2021-2026 LogicalJoe
 # .hidden = true;
@@ -21,8 +21,8 @@ proc read68KNumb {} {
 	return $Sign$Body\e$Exp
 }
 
-# Map of 68K characters which differ from isolatin1
-# - HexFiend encodes ascii the same as isolatin1
+# Map of 68k characters which differ from isolatin1
+# - Hex Fiend encodes ascii the same as isolatin1
 # - UTF-16-only because Tcl 8.5 ships with MacOS
 #  - https://core.tcl-lang.org/tips/doc/trunk/tip/600.md
 # Note the lack of a return character (typically 0x0D)
@@ -1005,7 +1005,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 
 			if {$Flags & 8} {
 				move -1
-				hex 3 Filler
+				hex 3 Padding
 				goto $dataStart
 				set lineStart $dataStart
 				set sections [split [cstr isolatin1] \x0D]
@@ -1067,7 +1067,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 			entryd Graph\ mode [set graphs [uint8]] 1 $modeDict
 			if {$g_count > 1} {
 				section Second\ graph {
-					uint8 Active\ Graphs
+					uint8 "Active graph count"
 					lappend graphs [uint8]
 					move -1
 					entryd Graph\ mode\ 2 [uint8] 1 $modeDict
@@ -1160,7 +1160,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 					MaskRead $Flags 0xFFE8 Unknown 2
 				}
 				entryd Style\ 3D [hex 1] 1 [dict create 0x00 Wire\ Frame 0x01 Hidden\ Surface 0x02 Contour\ Levels 0x03 "Wire and Contour" 0x04 Implicit\ Plot]
-				hex 1 unknown
+				hex 1 Unknown
 				section Equations {
 					set n [uint8 Equation\ count]
 					for_n $n {
@@ -1236,7 +1236,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 					} else {
 						entry Line ""
 					}
-					entryd Deliminator [hex 1] 1 [dict create 0x00 EOF 0x0D Line\ End]
+					entryd Delimiter [hex 1] 1 [dict create 0x00 EOF 0x0D Line\ End]
 				}
 			}
 		}
@@ -1252,7 +1252,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 			bytes [expr $endLoc-[pos]+1] Data
 		}
 		0xF8 { # OTHER
-			# TODO: base this on the ID instead of appvar magic (68K-natives might not have this)
+			# TODO: base this on the ID instead of AppVar magic (68k-natives might not have this)
 			hex 1 OTH
 			move -2
 			entry Magic [set a [String_68]]
@@ -1263,7 +1263,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 				hex 4 Magic\ BEB
 				hex 4 checksum?
 				set headOffset [hex 4 Header\ offset]
-				set metaOffset [hex 4 Meta\ offset]
+				set metaOffset [hex 4 Metadata\ offset]
 				set dataOffset [hex 4 Data\ offset]
 				goto $dataStart
 				move $headOffset
@@ -1278,16 +1278,16 @@ proc Recursive_RPN {{parent_precedence 15}} {
 				move $metaOffset
 				section Data
 				# flags
-				# bit 0 nz == small font avaliable
-				# bit 1 nz == large font avaliable
+				# bit 0 nz == small font available
+				# bit 1 nz == large font available
 				hex 2 Flags
-				for_n [uint32 Sections] {
+				for_n [uint32 Section\ count] {
 					section ""
-					set a [entryd Section\ ID [int32] 4 {-6 Text -3 Font\ Sizes -4 Something -2 Lines}]
+					set a [entryd Section\ ID [int32] 4 {-6 Text -3 Font\ Sizes -4 Unknown -2 Lines}]
 					sectionname $a
 					hex 4 Magic
-					int32 something
-					hex 8 null
+					int32 Unknown
+					hex 8 Null
 					set b [uint32 "Offset in data"]
 					set c [uint32 Length]
 					set d [pos]
@@ -1304,10 +1304,10 @@ proc Recursive_RPN {{parent_precedence 15}} {
 								hex 4 magic?
 								# flags?
 								hex 4 magic\ 2
-								set page_count [uint32 Pages]
+								set page_count [uint32 Page\ count]
 								section -collapsed Page\ offsets {
 									for {set a 0} {$a < $page_count} {incr a} {
-										lappend pageOffsets [uint32 page\ offset]
+										lappend pageOffsets [uint32 Page\ offset]
 									}
 								}
 								set pagesStart [pos]
@@ -1320,8 +1320,8 @@ proc Recursive_RPN {{parent_precedence 15}} {
 										set count [uint32 line\ count]
 										for_n $count {
 											section -collapsed Line {
-												int32 something
-												int32 something
+												int32 Unknown
+												int32 Unknown
 												set textStart [uint32 Text\ start]
 												set textEnd [uint32 Text\ end]
 												uint32 Pixel\ row
@@ -1355,7 +1355,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 			} else {
 				ReadAppVar [expr $endLoc-[pos]+1]
 			}
-			# sometimes appvars switch endianness
+			# sometimes AppVars switch endianness
 			big_endian
 		}
 		default {

@@ -1,4 +1,4 @@
-# TI-ROM checksums HexFiend template
+# TI-ROM checksums Hex Fiend template
 # Version 2.3
 # (c) 2021-2026 LogicalJoe
 
@@ -10,7 +10,7 @@ proc Current b {
 }
 
 set hl 0
-# TI-92 (II) & 68K boot
+# TI-92 (II) & 68k boot
 if {[len] in {65536 1048576 2097152 4194304} && ![hex 2]} {
 	big_endian
 	set a [hex 6]
@@ -28,7 +28,7 @@ if {[len] in {65536 1048576 2097152 4194304} && ![hex 2]} {
 			set a [expr $a>>8^[lindex $t [expr [uint8]^$a&255]]]
 		}
 		set hl ~$a
-	} elseif $a&255 { # 68K boot codes
+	} elseif $a&255 { # 68k boot codes
 		while {[pos]-65532} {
 			incr hl [uint16]
 		}

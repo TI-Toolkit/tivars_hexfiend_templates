@@ -1,4 +1,4 @@
-# TI graphing calculator file parser HexFiend template
+# TI graphing calculator file parser Hex Fiend template
 # Version 2.0
 # (c) 2021-2026 LogicalJoe
 # .types = (
@@ -23,7 +23,7 @@ variable CurDir [file dirname [file normalize [info script]]]
 if {[info comm hf_min_version_required] ne ""} {
 	hf_min_version_required 2.17
 } else {
-	puts stderr "Template must be used in HexFiend"
+	puts stderr "Template must be used in Hex Fiend"
 	return
 }
 
@@ -56,7 +56,7 @@ proc BAZIC {len {magic ""}} {
 	}
 }
 
-foreach a {ReadAppVar 68KRPN Assembly} {
+foreach a {ReadAppVar 68KRPN} {
 	set b [file join $CurDir $a.tcl]
 	if [file exists $b] {
 		source	$b
@@ -260,6 +260,7 @@ set	68KtypeDict [dict create \
 	0x25 "Certificate" \
 ]
 
+# 0x11 is only seen in TI's py2appvar 1.2.1+
 proc ReadVer {} {
 	set	s TI-83\ Plus
 	set	t TI-84\ Plus
@@ -268,7 +269,8 @@ proc ReadVer {} {
 		0x04 $t 0x05 "$t 2.30+" 0x06 "$t 2.53MP+" 0x07 "$t 2.55MP+" \
 		0x0A "$t CSE+" \
 		0x0B "$t CE 5.0-5.2+" 0x0C "$t CE 5.3+" \
-		0x10 Exact 0x11 Python]
+		0x10 Exact \
+		0x11 "5.5+ Python AppVar" 0x12 "5.5+ AppVar"]
 	section -collapsed Version {
 		set	v [format 0x%02X [expr [set F [hex 1]]&223]]
 		set	r [entryd Version $v 1 $Vers]
@@ -447,7 +449,7 @@ proc readGDB {} {
 		MaskRead $Flags 0x1D {0x00 Time 0x01 Web 0x04 uv 0x08 vw 0x10 uw}
 		MaskRead $Flags 0x02 {0 !WebVert 1 WebVert}
 		MaskRead $Flags 0x20 Unknown
-		# 0xC0 Unused
+		# 0xC0 reserved
 	}
 	if $isn82 {
 		section "Extended settings" {
@@ -455,7 +457,7 @@ proc readGDB {} {
 			sectionvalue $Flags
 			MaskRead $Flags 1 {1 ExprOff 0 ExprOn}
 			MaskRead $Flags 6 {0x00 SEQ(n) 0x02 SEQ(n+1) 0x04 SEQ(n+2) 0x06 SEQ(n+3)}
-			# 0xF8 Unused
+			# 0xF8 reserved
 		}
 	}
 
@@ -523,7 +525,7 @@ proc readGDB {} {
 			set	Flags [hex 1]
 			sectionvalue $Flags
 			MaskRead $Flags 1 {1 "Detect Asymptotes Off" 0 "Detect Asymptotes On"}
-			# & 0xFE unused
+			# & 0xFE reserved
 		}
 		endsection
 	}
@@ -674,7 +676,7 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 		}
 		0x04 -
 		0x05 {
-			set	n [uint16 "Indices"]
+			set	n [uint16 "Element count"]
 			for {set a 0} {$n > $a} {incr a} {
 				read85Numb [expr $a+1]
 			}
@@ -705,7 +707,7 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 						0xFC "Rigel Prgm" \
 						0xFD "ZShell 4.0"]
 					uint8	Entry\ offset
-					cstr	ascii Desc
+					cstr	ascii Description
 					bytes	[expr $datalen-[pos]+$start+2] Assembly
 				}
 			} elseif $datalen {
@@ -837,7 +839,7 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 		0x01 -
 		0x0D -
 		0x26 {
-			set	n [uint16 "Indices"]
+			set	n [uint16 "Element count"]
 			for {set a 0} {$n > $a} {incr a} {
 				readZ80Numb [expr $a+1] $magic
 			}
@@ -998,7 +1000,7 @@ proc SysTab {size magic} {
 		MaskRead $Flags 254 Unknown
 	}
 	ReadVer
-	# unused garbage in groups
+	# garbage in groups
 	entry	"Structure pointer" [format "0x%04X" [uint16]] 2 [expr [pos]-2]
 	# should be zero in groups to signify RAM
 	hex	1 "Page"
@@ -1046,25 +1048,25 @@ set	magic [ascii 8 Magic]
 if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 	source	[file join $CurDir TI-Flash.tcl]
 } elseif {$magic in {"**TI89**" "**TI92**" "**TI92P*"}} {
-	hex	2 "Thing"
+	hex	2 "Unknown"
 	ascii	8 "Directory"
 	ascii	40 "Comment"
 	set	numFiles [uint16 "Variable count"]
 	section "Variables"
 	for_n $numFiles {
 		section Entry
-		section "Meta" {
+		section "Metadata" {
 			sectionvalue "16 bytes"
 			set	bodyOffset [uint32 "Offset to data"]
 			move	8
 			set	datatype [hex 1]
 			move	-9
-			set	name [ascii 8 [expr $datatype==0x1D?"Rom version":"Name"]]
+			set	name [ascii 8 [expr $datatype==0x1D?"ROM version":"Name"]]
 			set	typeName [entryd "Type" [hex 1] 1 $68KtypeDict]
 			# Backup attributes are allegedly only used by TiLP in TI-89 "backup groups"
 			# https://github.com/debrouxl/tilibs/blob/master/libtifiles/trunk/src/tifiles.h#L69-L72
 			entryd	Attribute [hex 1] 1 [dict create 0x01 Locked 0x02 Protected 0x03 Archived 0x1D "Backup none" 0x26 "Backup Locked" 0x27 "Backup Archived"]
-			uint16	"Items in dir"
+			uint16	"Directory item count"
 		}
 		sectionname $typeName\ entry
 		if {$datatype!=0x1F} {
@@ -1075,7 +1077,7 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 				if {$datatype == 0x1D} {
 					bytes	39266 Data
 				} else {
-					hex	4 Something
+					hex	4 Unknown
 					big_endian
 					set	Size [uint16 Data\ length]
 					little_endian
@@ -1094,7 +1096,7 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 	hex	2 "Body section magic"
 } elseif {$magic in {"**TI73**" "**TI82**" "**TI83**" "**TI83F*" "**TI85**" "**TI86**"}} {
 	hex	2 "Descriptor"
-	entryd	"Owner Prod ID" [hex 1] 1 $ProdIDs
+	entryd	"Owner prod ID" [hex 1] 1 $ProdIDs
 	ascii	42 "Comment"
 	set	filesize [len_field Variables]
 	section "Variables"
@@ -1107,7 +1109,7 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 		int16
 		set	datatype [hex 1]
 		move	-3
-		section "Meta" {
+		section "Metadata" {
 			if {
 			$datatype == 0x0F && $magic == "**TI82**" ||
 			$datatype == 0x1D && $magic in {"**TI85**" "**TI86**"} ||

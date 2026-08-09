@@ -1,4 +1,4 @@
-# TI eZ80/Z80 shell header parser HexFiend template include
+# TI eZ80/Z80 shell header parser Hex Fiend template include
 # Version 1.0
 # (c) 2021-2026 LogicalJoe
 # .hidden = true;
@@ -65,7 +65,7 @@ if {$assembly == 0xBB6D} { # mono Z80
 	} else {
 		move -6
 		hex 2 "ASH"
-		hex 1 "Something"
+		hex 1 "Unknown"
 		cstr	ascii "Description"
 	}
 	bytes	[expr $datalen+$posset-[pos]] "Assembly"

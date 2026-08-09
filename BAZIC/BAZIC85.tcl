@@ -1,4 +1,4 @@
-# TI-8[56] TI-BASIC Detokenizer HexFiend template include
+# TI-8[56] TI-BASIC Detokenizer Hex Fiend template include
 # Version 1.0
 # (c) 2021-2025 LogicalJoe
 # .hidden = true;

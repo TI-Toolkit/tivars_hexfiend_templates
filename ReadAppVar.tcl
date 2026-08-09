@@ -1,4 +1,4 @@
-# TI-appvar parser HexFiend template include
+# TI-AppVar parser Hex Fiend template include
 # Version 1.0
 # (c) 2021-2025 LogicalJoe
 # .hidden = true;
@@ -11,7 +11,7 @@
 # F347BFAF - Notefolio
 
 proc ReadAppVar {datasize} {
-	proc readByLine {codesize {deliminator 10} {terminator 500}} {
+	proc readByLine {codesize {delimiter 10} {terminator 500}} {
 		section "Body"
 		set	start [pos]
 		set	number 0
@@ -20,7 +20,7 @@ proc ReadAppVar {datasize} {
 			set	linesize 0
 			set	line ""
 			set	term 400
-			while {($term != $deliminator) && ([pos] < $codesize+$start) && ($term != $terminator)} {
+			while {($term != $delimiter) && ([pos] < $codesize+$start) && ($term != $terminator)} {
 				incr	linesize 1
 				set	term [uint8]
 				set	line $line[format %c $term]
@@ -91,10 +91,10 @@ proc ReadAppVar {datasize} {
 				set colors 256
 			}
 			entry	Palette\ entries $colors 1 [expr [pos]-1]
-			section -collapsed Indices {
+			section -collapsed Palette {
 				set index 0
 				while {$colors > 0} {
-					uint16l Entry\ $index
+					uint16l "Index $index"
 					incr colors -1
 					incr index
 				}
@@ -139,7 +139,7 @@ proc ReadAppVar {datasize} {
 			if {[uint8]==80} {
 				move	-1
 				# bit 0: Line is continuing previous line?
-				hex [expr $items] "Line Flags"
+				hex [expr $items] "Line flags"
 				hex 1 Unknown
 			} else {
 				move	-1
@@ -169,7 +169,7 @@ proc ReadAppVar {datasize} {
 				uint8	"Level"
 			}
 			if {[expr 2&$Flags]} {
-				uint8	"Choices"
+				uint8	"Choice count"
 				uint8	"Correct"
 			}
 			sectionvalue [cstr ascii "Name"]
@@ -189,7 +189,7 @@ proc ReadAppVar {datasize} {
 			sectionvalue $Flags
 			MaskRead $Flags 1 {1 "Use levels" 0 "No levels"} 2
 			MaskRead $Flags 2 {1 "Self-check" 0 "Multiple choice"} 2
-			MaskRead $Flags 0xFFFC Unknown/Unused 2
+			MaskRead $Flags 0xFFFC Reserved 2
 		}
 
 		section -collapsed "Title text offsets" {
@@ -217,7 +217,7 @@ proc ReadAppVar {datasize} {
 		uint8	"Correct reward"
 		uint8	"Incorrect penalty"
 		uint8	"Skip penalty"
-		set	cardcount [uint8 "Number of cards"]
+		set	cardcount [uint8 "Card count"]
 		section -collapsed "Card offsets" {
 			for {set a 0} {$a < $cardcount} {incr a} {
 				lappend cards [uint16l "Offset $a"]
@@ -239,7 +239,7 @@ proc ReadAppVar {datasize} {
 			MaskRead $flags 4 {1 "Shuffle cards" 0 "Do not shuffle cards"}
 			MaskRead $flags 8 {1 "Ignore levels" 0 "Use levels"}
 			MaskRead $flags 16 {1 "Animate flip" 0 "Do not animate flip"}
-			MaskRead $flags 32 {1 "5 Box mode" 0 "not 5 box mode"}
+			MaskRead $flags 32 {1 "5 Box mode: On" 0 "5 Box mode: Off"}
 			MaskRead $flags 192 Unknown
 		}
 		ascii	9 "Current AppVar"
@@ -253,7 +253,7 @@ proc ReadAppVar {datasize} {
 			MaskRead $flags 2 Unknown
 			MaskRead $flags 4 {1 "Don't display help" 0 "Display help"}
 			MaskRead $flags 8 {1 "Display equation evaluation in editor preview" 0 "Display equation in editor preview"}
-			# 0xF0 unused
+			# 0xF0 reserved
 		}
 		# mask 8
 		hex	1 Number
@@ -277,13 +277,13 @@ proc ReadAppVar {datasize} {
 					3	{ readZ80Numb Current
 						BAZIC [expr $secsiz-17] }
 				}
-				hex	2 Cell\ #
-				hex	2 NULLs
+				hex	2 Cell\ number
+				hex	2 Nulls
 				endsection
 			}
 			move	-1
-			# Cell NULL is the end of the cells
-			uint8	"End of Cells"
+			# Cell Null is the end of the cells
+			uint8	"End of cells"
 			if [uint8] {
 				move	-1
 				# if this is not 4C08 then insert 2C bytes (number of bytes following)
@@ -293,7 +293,7 @@ proc ReadAppVar {datasize} {
 				hex	2 Unknown
 				hex	6 "001F F800 0000"
 				hex	6 "001F F800 0000"
-				hex	22 Datas
+				hex	22 Unknown
 				hex	2 Unknown
 			} else {
 				move	-1
@@ -317,7 +317,7 @@ proc ReadAppVar {datasize} {
 				# cstr
 			} else {
 				entry Structure $struct\ (Compressed) 1 [expr [pos]-1]
-				hex 1 Unread
+				hex 1 Reserved
 				uint8 Maybe\ cursor\ X ;# [expr 2*$n+36]
 				uint8 Maybe\ cursor\ Y ;# [expr 2*$n+18]
 				# each block is 18 bytes
@@ -377,7 +377,7 @@ proc ReadAppVar {datasize} {
 			while {$count} {
 				section -collapsed "Help screen" {
 					set count [lindex $lines $lineIndex]
-					ascii 1 "Lines"
+					ascii 1 "Line count"
 					move 1
 					foreach line [lrange $lines [expr $lineIndex+1] [expr $lineIndex+$count]] {
 						entry 0 $line [string length $line] [pos]
@@ -390,7 +390,7 @@ proc ReadAppVar {datasize} {
 	} elseif {$head == "\xf3\x47\xbf\xaf"} {
 		set	start [pos]
 		hex	4 NoteFolio
-		hex	4 NULLs
+		hex	4 Nulls
 		ascii	8 Name
 		uint16	Size
 		hex	6 Unknown
