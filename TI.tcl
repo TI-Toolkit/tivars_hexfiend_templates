@@ -88,6 +88,7 @@ if [file exists [file join $CurDir Assembly.tcl]] {
 }
 
 # entryd label value length dict
+# returns $value else [dict get] if [dict exists]
 proc entryd {a b c d} {
 	if [dict exists $d [set f [set e $b]]] {
 		set	f $b\ ([set e [dict get $d $b]])
@@ -1048,7 +1049,7 @@ set	magic [ascii 8 Magic]
 if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 	source	[file join $CurDir TI-Flash.tcl]
 } elseif {$magic in {"**TI89**" "**TI92**" "**TI92P*"}} {
-	hex	2 "Unknown"
+	hex	2 "Version"
 	ascii	8 "Directory"
 	ascii	40 "Comment"
 	set	numFiles [uint16 "Variable count"]

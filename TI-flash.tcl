@@ -115,29 +115,6 @@ proc readTIHex {} {
 	return	$type
 }
 
-section	"File packaging" {
-	entry	"Version" "[format %x [uint8]].[format %x [uint8]]" 2 [expr [pos]-2]
-	set	binary [hex 1]
-	entryd	"Binary flag" $binary 1 [dict create 0x00 "Binary" 0x01 "Intel"]
-	entryd	"Object type" [hex 1] 1 [dict create 0x00 "!Z80" 0x88 "Z80"]
-	hex	4 "Date"
-	entry	"Name" "[uint8],[ascii 8]" 9 [expr [pos]-9]
-	bytes	23 Padding
-	set	a 0
-	set	b [pos]
-	while {[uint8] != 0} {
-		move	-1
-		incr	a
-		entryd	"Owner calc ID $a" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
-		entryd	"Type $a" [set vartype [hex 1]] 1 $Z80typeDict
-	}
-	goto	$b
-	move	25
-	entryd	"Owner prod ID" [hex 1] 1 $ProdIDs
-	set	datasize [uint32]
-	entry	"Data size" $datasize 4 [expr [pos]-4]
-}
-
 proc readExtendedFormat {fieldSize} {
 	set	start [pos]
 	set	r [ascii 3]
@@ -175,23 +152,28 @@ proc readExtendedFormat {fieldSize} {
 		bytes	[expr $fieldSize-$main] "Body"
 		endsection
 	} elseif {[uint32] == 0x3D537B16} {
+		big_endian
 		move	-4
 		section -collapsed "Data"
 		section "Additional structure" {
-			hex	4 "68k"
-			ascii	9 "Name"
-			bytes	25 "Reserved"
-			big_endian
-			hex	4 Unknown
-			set	main [hex 4 Main]
-			hex	4 Initialized\ location
-			hex	4 Initialized\ size
-			hex	4 Reserved
-			little_endian
+			hex 4 "68k"
+			ascii 8 "Name"
+			bytes 24 "Reserved"
+			hex 2 Flags
+			# 0x0001: Localization app
+			hex 4 "Length of data segment"
+			set main [hex 4 "Offset to code segment"]
+			hex 4 "Offset to initial data table"
+			hex 4 "Length of initial data table"
+			set a [hex 4 "Length of optional header"]
+			if $a {
+				bytes $a "Optional header"
+			}
 		}
 		bytes	[expr $main - [pos] + $start] "Relocation table"
 		# there seems to be more formatted data but is inconsistent
 		bytes	[expr $fieldSize - [pos] + $start] "Body"
+		little_endian
 		endsection
 	} else {
 		move	-4
@@ -236,6 +218,29 @@ proc getsection {} {
 }
 
 
+section "Flash Header"
+
+entry "Version" "[format %x [uint8]].[format %x [uint8]]" 2 [expr [pos]-2]
+set binary [hex 1]
+entryd "Binary flag" $binary 1 [dict create 0x00 "Binary" 0x01 "Intel"]
+entryd "Object type" [hex 1] 1 [dict create 0x00 "!Z80" 0x88 "Z80"]
+hex 4 "Date" ;# supposed to be DDMMYYYY
+entry "Name" "[uint8],[ascii 8]" 9 [expr [pos]-9]
+bytes 23 Padding
+set a 0
+set b [pos]
+while {[uint8] != 0} {
+	move -1
+	incr a
+	entryd "Owner calc ID $a" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
+	entryd "Type $a" [set vartype [hex 1]] 1 $Z80typeDict
+}
+goto $b
+move 25
+entryd "Owner prod ID" [hex 1] 1 $ProdIDs
+set datasize [uint32]
+entry "Data size" $datasize 4 [expr [pos]-4]
+
 section	"Data" {
 	set	start [pos]
 	if {$vartype == 0x3E} { # License
@@ -267,11 +272,14 @@ section	"Data" {
 			ascii	[expr 78+$datasize-[pos]] "Extended data"
 		}
 	} else {
+		sectionname "Certificate"
 		while {$start+$datasize>[pos]} {
 			getsection
 		}
 	}
 }
+
+endsection ;# Flash Header
 
 #read multiple FLASH headers, only one basecode/application allowed per physical file
 if {[len]-[pos] > 78} {

@@ -49,30 +49,34 @@ proc ReadAppVar {datasize} {
 		move	-4
 	}
 
-	if {$head in {"PYCD" "PYSC"}} {
-		ascii	4 "Python"
-		set	namesize [hex 1 "Name length"]
-		if {$namesize} {
-			hex	1 "Version?"
-			set	number [string length [cstr utf8 "Filename"]]
-			incr	datasize -$number
-			incr	datasize -7
-		} else {
-			incr	datasize -5
+	if {$head in {"PYCD" "PYSC" "PYMP"}} {
+		set a [pos]
+		ascii 4 "Python"
+		section -collapsed "Record (NULL)"
+		set record_size [uleb128 "Record length"]
+		while {$record_size} {
+			set record [hex 1]
+			set record_name [entryd "Record type" $record 1 [dict create 0x01 Filename 0x02 Menu\ definitions]]
+			sectionname "Record ($record_name)"
+			if {$record_size==1} {
+				entry [expr {$record in {0x01 0x02} ? $record_name:"Data"}] ""
+			} elseif {$record==2} {
+				readByLine [expr $record_size-1]
+			} elseif {$record==1} {
+				sectionvalue [ascii [expr $record_size-1] "Filename"]
+			} else {
+				bytes [expr $record_size-1] "Data"
+			}
+			endsection
+			section -collapsed "Record (NULL)"
+			set record_size [uleb128 "record length"]
 		}
-		readByLine $datasize
-	} elseif {$head == "PYMP"} {
-		#https://github.com/commandblockguy/tipycomp/blob/main/format.txt
-		ascii	4 "Python module"
-		incr	datasize -4
-		set	length [uleb128 "Length"]
-		hex	1 "Verison?"
-		incr	datasize -3
-		set	offset [pos]
-		#todo: sections?
-		readByLine $length
-		incr	datasize [expr $offset-[pos]]
-		bytes	$datasize "Compiled module"
+		endsection
+		if {$head=="PYMP"} {
+			bytes [expr $datasize+$a-[pos]] "Compiled module"
+		} else {
+			readByLine [expr $datasize+$a-[pos]]
+		}
 	} elseif {$head == "IM8C"} {
 		#https://github.com/TI-Planet/img2calc/blob/4d5599177229c18f0e28b12f90b881bb09f78b77/index.html#L1153-L1213
 		set	start [pos]

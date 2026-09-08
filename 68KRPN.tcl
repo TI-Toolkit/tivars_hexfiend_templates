@@ -987,15 +987,18 @@ proc Recursive_RPN {{parent_precedence 15}} {
 				sectionvalue $Flags
 				MaskRead $Flags 7 [dict create 0x00 Line 0x01 Dot 0x02 Thick\ line 0x03 Animate 0x04 Path 0x05 Shade\ above 0x06 Shade\ below 0x07 Square]
 				MaskRead $Flags 8 {1 Untokenized 0 Tokenized}
-				MaskRead $Flags 16 Unknown ;# {1 function}?
+				MaskRead $Flags 16 {1 "Plot var: yes" 0 "Plot var: no"}
 				MaskRead $Flags 32 Unknown
 				MaskRead $Flags 64 {1 "Graph 1 plot on" 0 "Graph 1 plot off"}
 				MaskRead $Flags 128 {1 "Graph 2 plot on" 0 "Graph 2 plot off"}
 			}
 
-			move -3
-			hex 2 Unknown
-			move -3
+			move -2
+			hex 1 Link\ flag
+			# 0x01 : in use
+			move -2
+			hex 1 Entry\ count
+			move -2
 
 			set expression "$varName"
 
@@ -1099,7 +1102,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 						set EquPrfx u
 					}
 					5 {
-						lappend numbers zmin zmax zscl eyetheta eyephi eyepsi ncontour unknown1 unknown2 unknown3
+						lappend numbers zmin zmax zscl eyetheta eyephi eyepsi ncontour scale1 scale2 scale3
 						set EquPrfx z
 					}
 					6 {
@@ -1160,7 +1163,7 @@ proc Recursive_RPN {{parent_precedence 15}} {
 					MaskRead $Flags 0xFFE8 Unknown 2
 				}
 				entryd Style\ 3D [hex 1] 1 [dict create 0x00 Wire\ Frame 0x01 Hidden\ Surface 0x02 Contour\ Levels 0x03 "Wire and Contour" 0x04 Implicit\ Plot]
-				hex 1 Unknown
+				hex 1 Reserved
 				section Equations {
 					set n [uint8 Equation\ count]
 					for_n $n {
