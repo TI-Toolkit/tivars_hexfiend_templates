@@ -53,14 +53,18 @@ proc Field_Names {value} {
 		808	{ set x "Page count" }
 		809	{ set x "Disable TI splash" }
 		80A	{ set x "Max hardware revision" }
-		80C	{ set x "Lowest basecode" }
+		80C	{ set x "Fuse/HW compatibility" }
+		80D	{ set x "Basecode compatibility" }
+		80E	{ set x "Basecode compatibility" }
 		810	{ set x "Master" }
 		811	{ set x "Signing key" }
 		812	{ set x "Version" }
 		813	{ set x "Build" }
 		814	{ set x "Name" }
 		817	{ set x "Final" }
-		81A	{ set x "Max hardware" }
+		81A	{ set x "Max hardware revision" }
+		81C	{ set x "Unknown" }
+		81D	{ set x "Python compatibility generation?" }
 		default	{ set x $value }
 	}]
 }

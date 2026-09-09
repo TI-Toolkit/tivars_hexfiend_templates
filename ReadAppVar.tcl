@@ -69,7 +69,7 @@ proc ReadAppVar {datasize} {
 			}
 			endsection
 			section -collapsed "Record (NULL)"
-			set record_size [uleb128 "record length"]
+			set record_size [uleb128 "Record length"]
 		}
 		endsection
 		if {$head=="PYMP"} {
@@ -247,62 +247,138 @@ proc ReadAppVar {datasize} {
 			MaskRead $flags 192 Unknown
 		}
 		ascii	9 "Current AppVar"
-	} elseif {$head in {"\xf3\x47\xbf\xaa" "\xf3\x47\xbf\xab"}} {
-		hex	4 CelSheet
-		ascii	8 Name
+	} elseif {$head == "\xf3\x47\xbf\xab"} {
+		hex 4 CelSheet\ State
+		ascii 8 Name
+		hex 2 Unused
+	} elseif {$head == "\xf3\x47\xbf\xaa"} {
+		proc cell_ref {title} {
+			set location [uint16]
+			if {$location} {
+				set a [format %c [expr 65+$location/1000]][expr $location%1000]
+			} else {
+				set a NULL
+			}
+			entry $title $location\ ($a) 2 [expr [pos]-2]
+			return $a
+		}
+		proc cell_range {label} {
+			section -collapsed $label {
+				sectionvalue [cell_ref Start]:[cell_ref End]
+			}
+		}
+		proc fixedFieldStr {label size} {
+			set a [uint16 $label\ length]
+			# not corrected on load; clamp for display
+			if {$a>$size} {set a $size}
+			if {$a} {
+				# TODO: labels are tokens
+				ascii $a $label
+			} else {
+				entry $label ""
+			}
+			if {$size-$a} {bytes [expr $size-$a] Unused\ buffer}
+		}
+		hex 4 CelSheet
+		ascii 8 Name
 		# stored in (iy+$30)
 		section Flags {
 			sectionvalue [set flags [hex 1]]
-			MaskRead $flags 1 Unknown
-			MaskRead $flags 2 Unknown
-			MaskRead $flags 4 {1 "Don't display help" 0 "Display help"}
-			MaskRead $flags 8 {1 "Display equation evaluation in editor preview" 0 "Display equation in editor preview"}
-			# 0xF0 reserved
+			MaskRead $flags 1 {1 "AutoCalc: N" 0 "AutoCalc: Y"}
+			MaskRead $flags 2 {1 "Cursor Movement: right" 0 "Cursor Movement: down"}
+			MaskRead $flags 4 {1 "Init Help: N" 0 "Init Help: Y"}
+			MaskRead $flags 8 {1 "Preview value in editor" 0 "Preview formula in editor"}
+			MaskRead $flags 240 Reserved
 		}
 		# mask 8
-		hex	1 Number
-		if {$head == "\xf3\x47\xbf\xaa"} {
-			hex	13 AA*13
-			hex	40 00*40
-			hex	20 !00*20
-			hex	105 00*105
-			while {[set secsiz [uint8]]} {
-				move	-1
-				section -collapsed Cell
-				uint8	Size
-				set	location [hex 2]
-				set	a [format %c [expr 65+$location/1000]][expr $location%1000]
-				entry	Cell\ position $location\ ($a) 2 [expr [pos]-2]
-				sectionvalue $a
-				set	r [uint8 Datatype]
-				switch -- $r {
-					0	{ readZ80Numb }
-					1	{ BAZIC [expr $secsiz-8] }
-					3	{ readZ80Numb Current
-						BAZIC [expr $secsiz-17] }
-				}
-				hex	2 Cell\ number
-				hex	2 Nulls
-				endsection
+		hex 1 Reserved
+
+		section -collapsed "Column Decimal settings" {
+			sectionvalue [hex 13]
+			move -13
+			for {set a 1} {$a < 27} {incr a} {
+				set b [expr {$a % 2 ? [uint8] : $b << 4}]
+				entryd "Column [format "%c" [expr 64+$a]]" [expr $b>>4&15] 1 [dict create 0 Fix\ 0 1 Fix\ 1 2 Fix\ 2 3 Fix\ 3 4 Fix\ 4 5 Fix\ 5 10 Float]
 			}
-			move	-1
-			# Cell Null is the end of the cells
-			uint8	"End of cells"
-			if [uint8] {
-				move	-1
-				# if this is not 4C08 then insert 2C bytes (number of bytes following)
-				hex	2 Magic\ 4C08
-				hex	6 "001F F800 0000"
-				# bottom three bits are moved to D0EB10 conditional on something and Flags bit 3
-				hex	2 Unknown
-				hex	6 "001F F800 0000"
-				hex	6 "001F F800 0000"
-				hex	22 Unknown
-				hex	2 Unknown
-			} else {
-				move	-1
-				hex	2 Nulls
+		}
+
+		foreach t {Scatter Line} {
+			section -collapsed "$t Chart" {
+				cell_range XRange
+				cell_range YRange1
+				cell_range YRange2
+				cell_range YRange3
+				set a [hex 1]
+				entry Boolean $a\ ([expr $a?"AxesOff":"AxesOn"]) 1 [expr [pos]-1]
+				fixedFieldStr Title 21
 			}
+		}
+		section -collapsed "Pie Chart" {
+			cell_range Categories
+			cell_range Series
+			set a [hex 1]
+			entry Boolean $a\ ([expr $a?"Percent":"Number"]) 1 [expr [pos]-1]
+			fixedFieldStr Title 10
+		}
+		section -collapsed "Bar Chart" {
+			cell_range Categories
+			cell_range Series1
+			cell_range Series2
+			cell_range Series3
+			fixedFieldStr Ser1Name 6
+			fixedFieldStr Ser2Name 6
+			fixedFieldStr Ser3Name 6
+			set a [hex 1]
+			entry Boolean $a\ ([expr $a?"Horiz":"Vertical"]) 1 [expr [pos]-1]
+			fixedFieldStr Title 21
+		}
+		big_endian
+		while {[set secsiz [uint8]]} {
+			move -1
+			section -collapsed Cell
+			uint8 Size
+			sectionvalue [cell_ref Cell\ position]
+			set cell_type [uint8]
+			section -collapsed "Cell type" {
+				set temp [entryd "Cell type" [expr $cell_type&3] 1 [dict create 0 Number 1 String 2 Expression 3 Expression]]
+				MaskRead $cell_type 4 [dict create 1 "Invalid record" 0 "Valid record"]
+				sectionvalue $temp\ ([expr $cell_type&4?"Invalid":"Valid"])
+				MaskRead $flags 248 Reserved
+			}
+			switch -- [expr {$cell_type & 3}] {
+				0	{ readZ80Numb }
+				1	{ BAZIC [expr $secsiz-8] }
+				default	{ readZ80Numb Current
+					BAZIC [expr $secsiz-17] }
+			}
+			hex 2 Insertion\ order
+			hex 2 Nulls
+			endsection
+		}
+		move -1
+		# Cell record with size zero ends cell list
+		uint8 "End of cells"
+		little_endian
+		if {[hex 2]==0x4C08} {
+			move -2
+			hex 2 "Color Magic 4C08"
+			section "Colors" {
+				# RGB565 colors
+				hex 2 "Scatter YRange1 color" ;# 001F (defaults)
+				hex 2 "Scatter YRange2 color" ;# F800
+				hex 2 "Scatter YRange3 color" ;# 0000
+				hex 2 Unknown ;# preserved, possibly unused
+				hex 2 "Line YRange1 color"
+				hex 2 "Line YRange2 color"
+				hex 2 "Line YRange3 color"
+				hex 2 "Bar Series1 color"
+				hex 2 "Bar Series2 color"
+				hex 2 "Bar Series3 color"
+				bytes 24 Buffer
+			}
+		} else {
+			move -2
+			hex 2 Nulls
 		}
 	} elseif {$head == "CaJu"} {
 		hex 4 CabriJr
