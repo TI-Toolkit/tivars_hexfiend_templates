@@ -205,11 +205,10 @@ proc getsection {} {
 			} elseif {$field_id == 817} {
 				readExtendedFormat $field_size_2
 			} elseif {$field_id == "090"} {
-				set a [uint32]
-				# can't know timezone this was built in
-				# set absoluteTime [expr {[clock scan "1997-01-01" -format "%Y-%m-%d"] + $a}]
-				set date [clock format $a -format "%y/%m/%d, %H:%M:%S"]
-				entry Data $a\ (+$date) 4 [expr [pos]-4]
+				# 68k and eZ80 are both big-endian
+				set a [hex 4]
+				set date [clock format [expr $a+852076800] -timezone :UTC -format "%Y-%m-%d %H:%M:%S"]
+				entry Data $a\ ($date) 4 [expr [pos]-4]
 			} else {
 				hex	$field_size_2 "Data"
 			}
