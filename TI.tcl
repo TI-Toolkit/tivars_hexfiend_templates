@@ -1046,8 +1046,8 @@ if {[len] < 8} {
 }
 set	magic [ascii 8 Magic]
 
-if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
-	source	[file join $CurDir TI-Flash.tcl]
+if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-flash.tcl]]} {
+	source	[file join $CurDir TI-flash.tcl]
 } elseif {$magic in {"**TI89**" "**TI92**" "**TI92P*"}} {
 	hex	2 "Version"
 	ascii	8 "Directory"
@@ -1071,24 +1071,32 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-Flash.tcl]]} {
 		}
 		sectionname $typeName\ entry
 		if {$datatype!=0x1F} {
-			set	retu [pos]
-			goto	$bodyOffset
+			set retu [pos]
+			goto $bodyOffset
 			section "Body" {
-				set	loopStart [pos]
 				if {$datatype == 0x1D} {
-					bytes	39266 Data
+					bytes [expr [len]-84] Data
 				} else {
-					hex	4 Unknown
+					if {$datatype == 0x04} {
+						uint16 "CBL list elements"
+						hex 2 Reserved
+					} elseif {$datatype == 0x06} {
+						uint16 "CBL mat rows"
+						uint16 "CBL mat columns"
+					} else {
+						hex 2 Reserved
+						hex 2 Reserved
+					}
 					big_endian
-					set	Size [uint16 Data\ length]
+					set Size [uint16 Data\ length]
 					little_endian
 					68KreadBody $datatype $name $Size
 					sectionvalue [expr $Size+8]\ bytes
 				}
-				CheckSum $loopStart [pos]
+				CheckSum $bodyOffset [pos]
 			}
 			sectionvalue "$name"
-			goto	$retu
+			goto $retu
 		}
 		endsection
 	}

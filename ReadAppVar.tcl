@@ -268,16 +268,18 @@ proc ReadAppVar {datasize} {
 			}
 		}
 		proc fixedFieldStr {label size} {
-			set a [uint16 $label\ length]
-			# not corrected on load; clamp for display
-			if {$a>$size} {set a $size}
-			if {$a} {
-				# TODO: labels are tokens
-				ascii $a $label
-			} else {
-				entry $label ""
+			# TODO: labels are tokens
+			section -collapsed $label {
+				set a [uint16 String\ length]
+				# not corrected on load; clamp for display
+				if {$a>$size} {set a $size}
+				if {$a} {
+					sectionvalue [ascii $a String]
+				} else {
+					entry String ""
+				}
+				if {$size-$a} {bytes [expr $size-$a] Unused\ buffer}
 			}
-			if {$size-$a} {bytes [expr $size-$a] Unused\ buffer}
 		}
 		hex 4 CelSheet
 		ascii 8 Name
