@@ -33,6 +33,8 @@ proc len_field {{title Data}} {
 	return	$s
 }
 
+proc 85fontmap {s} { return $s }
+
 foreach a {BAZIC83 BAZIC85 BAZIC81 BAZIC73} {
 	set b [file join $CurDir BAZIC $a.tcl]
 	if [file exists $b] {
@@ -71,20 +73,33 @@ foreach a {ReadAppVar 68KRPN} {
 	}
 }
 
-if [file exists [file join $CurDir Assembly.tcl]] {
-	source	[file join $CurDir Assembly.tcl]
-} else {
-	proc isAsm {asm} {
-		return [expr {$asm in {0xEF7B 0xEF69 0xBB6D}}]
-	}
-	proc ReadAsm {asm len} {
-		hex	2 "Asm token"
-		if {$len-2} {
-			bytes	[expr $len-2] Assembly
+proc ReadAsm83 {datalen {magic "**TI83F*"}} {
+	if {$datalen < 2} { return 0 }
+	set assembly [hex 2]
+	move -2
+	if {!(($magic == "**TI83F*" && $assembly in {0xBB6D 0xEF69 0xEF7B}) ||
+		($magic == "**TI73**" && $assembly == 0xBB6D))} { return 0 }
+	section -collapsed Code {
+		hex 2 "Asm token"
+		if {$datalen > 2} {
+			bytes [expr {$datalen - 2}] Assembly
 		} else {
-			entry	Assembly ""
+			entry Assembly ""
 		}
 	}
+	return 1
+}
+proc ReadAsm85 {datalen magic datatype} {
+	if {$magic != "**TI86**" || $datatype != 0x12 || $datalen < 2} { return 0 }
+	set assembly [hex 2]
+	move -2
+	if {$assembly != 0x8E28} { return 0 }
+	section -collapsed Code { bytes $datalen Assembly }
+	return 1
+}
+foreach a {Assembly83 Assembly85} {
+	set b [file join $CurDir BAZIC $a.tcl]
+	if {[file exists $b]} { source $b }
 }
 
 # entryd label value length dict
@@ -302,7 +317,6 @@ proc read85Numb {{index ""}} {
 		section -collapsed [expr $recursed?"Complex":"Real"]
 		section -collapsed "Flags" {
 			set	Flags [hex 1]
-			# TODO: what is the correct typemask?
 			set	type [format "0x%02X" [expr $Flags & 31]]
 			if {$Flags == 255} {
 				sectionvalue $Flags\ (Undefined)
@@ -590,14 +604,14 @@ proc read85GDB {type {magic "**TI86**"}} {
 		}
 	}
 
-	set	functions [uint8 "Equation count"]
+	set functions [uint8 "Equation count"]
 	section Equations
 	for_n $functions {
 		section Equation
 		section -collapsed Flags {
-			set	Flags [hex 1]
-			set	equid [expr $Flags & 127]
-			entry	ID $equid 1 [expr [pos]-1]
+			set Flags [hex 1]
+			set equid [expr $Flags & 127]
+			entry ID $equid 1 [expr [pos]-1]
 			sectionvalue "$EquPrfx$equid - [expr $Flags & 0x80?"S":"Uns"]elected"
 			MaskRead $Flags 128 {1 Selected 0 Unselected}
 		}
@@ -606,19 +620,30 @@ proc read85GDB {type {magic "**TI86**"}} {
 			0x0F {
 				foreach a {x y} {
 					section ${a}t$equid {
-						BAZIC85	[len_field Code] $magic
+						BAZIC85 [len_field Code] $magic
 					}
 				}
 			}
 			0x10 {
-				BAZIC85	[len_field Code] $magic
+				BAZIC85 [len_field Code] $magic
+				set initialType 0x00
 				if $GDB86 {
-					hex	1 Unknown
+					set initialType [hex 1]
+					entryd "Initial condition type" $initialType 1 {0x00 Real 0x04 {Real list}}
 				}
-				read85Numb Initial
+				if {$initialType == 0x04} {
+					section "Initial conditions" {
+						set n [uint16 "Element count"]
+						for {set a 0} {$a < $n} {incr a} {
+							read85Numb [expr {$a + 1}]
+						}
+					}
+				} else {
+					read85Numb "Initial condition"
+				}
 			}
 			default {
-				BAZIC85	[len_field Code] $magic
+				BAZIC85 [len_field Code] $magic
 			}
 		}
 		endsection
@@ -684,86 +709,69 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 		}
 		0x0A { BAZIC85 [len_field Code] $magic }
 		0x0C {
-			set	datalen [len_field Code]
-			set	firstbyte 1
-			if $datalen {
-				set	firstbyte [uint8]
-				move	-1
-			}
-			if {!$firstbyte && $magic == "**TI85**"} {
-				section -collapsed Code {
-					hex	1 Assembly
-					entryd	ID [hex 1] 1 [dict create \
-						0x42 "Summit TI-BASIC ASM Subroutine" \
-						0x4E "Summit Non-relocation Prgm" \
-						0x50 "PhatOS & Peak Relocation Prgm" \
-						0x52 "Summit Relocation Prgm" \
-						0x53 "Summit Shell Patch" \
-						0x54 "Summit TSR" \
-						0x70 "Peak Non-relocation Prgm" \
-						0xBD SuperNova \
-						0xF8 FutureOS \
-						0xF9 Usgard \
-						0xFB "Rigel Library" \
-						0xFC "Rigel Prgm" \
-						0xFD "ZShell 4.0"]
-					uint8	Entry\ offset
-					cstr	ascii Description
-					bytes	[expr $datalen-[pos]+$start+2] Assembly
+			set datalen [len_field Code]
+			set linenumber 0
+			if {![ReadAsm85 $datalen $magic $datatype]} {
+				if {$datalen} {
+					set dataStart [pos]
+					set sections [split [encoding convertfrom iso8859-1 [bytes $datalen]] \xD6]
+					foreach line $sections {
+						incr linenumber
+						if {$line==""} {
+							entry "Line $linenumber" ""
+						} else {
+							entry "Line $linenumber" [string map [list \x00 {\0}] [85fontmap $line]] [string length $line] $dataStart
+						}
+						incr dataStart [expr [string length $line]+1]
+					}
+				} else {
+					entry Code ""
 				}
-			} elseif $datalen {
-				str	$datalen ascii Code
-			} else {
-				entry	Code ""
 			}
 		}
 		0x12 {
-			set	datalen [len_field Code]
-			set	firstword 1
-			set	firstbyte 1
-			if {$datalen > 1} {
-				set	firstword [hex 2]
-				move	-2
-			}
-			if $datalen {
-				set	firstbyte [uint8]
-				move	-1
-			}
-			if {$firstword == 0x8E28} {
-				section -collapsed Code {
-					hex	2 "Z80 token"
-					bytes	[expr $datalen-2] Assembly
+			set datalen [len_field Code]
+			if {![ReadAsm85 $datalen $magic $datatype]} {
+				set firstword 1
+				set firstbyte 1
+				if {$datalen > 1} {
+					set firstword [hex 2]
+					move -2
 				}
-			} elseif !$firstbyte {
-				section -collapsed Code {
-					hex	1 Untokenized
-					incr	datalen -1
-					if !$firstword {
-						hex	1 Locked
-						incr	datalen -1
-					}
-
-					# model line character sets should become a function with the different encodings
-					set	start [pos]
-					set	linenumber 0
-					if $datalen {
-						set	sections [split [str $datalen isolatin1] \xD6]
-						foreach line $sections {
-							incr	linenumber
-							if {$line==""} {
-								entry	"Line $linenumber" ""
-							} else {
-								entry	"Line $linenumber" "[string map {"\x19" ">=" "\x1C" "->"} $line]" [string length $line] $start
-							}
-							incr	start [expr [string length $line]+1]
+				if $datalen {
+					set firstbyte [uint8]
+					move -1
+				}
+				if !$firstbyte {
+					section -collapsed Code {
+						hex 1 Untokenized
+						incr datalen -1
+						if !$firstword {
+							hex 1 Locked
+							incr datalen -1
 						}
-					} else {
-						entry	"Line 1" ""
-					}
 
+						set start [pos]
+						set linenumber 0
+						if $datalen {
+							set sections [split [str $datalen isolatin1] \xD6]
+							foreach line $sections {
+								incr linenumber
+								if {$line==""} {
+									entry "Line $linenumber" ""
+								} else {
+									entry "Line $linenumber" [85fontmap $line] [string length $line] $start
+								}
+								incr start [expr [string length $line]+1]
+							}
+						} else {
+							entry "Line 1" ""
+						}
+
+					}
+				} else {
+					BAZIC85 $datalen $magic
 				}
-			} else {
-				BAZIC85	$datalen $magic
 			}
 		}
 		0x0D -
@@ -777,8 +785,9 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 		0x1A -
 		0x1B {
 			len_field
-			set	numbs "xMin xMax xScl yMin yMax yScl"
+			set numbs "xMin xMax xScl yMin yMax yScl"
 			switch -- $datatype {
+				0x17 { set numbs "$numbs lower upper" }
 				0x18 { set numbs "thetaMin thetaMax thetaStep $numbs" }
 				0x19 { set numbs "tMin tMax tStep $numbs" }
 				0x1A { set numbs "difTol tPlot tMin tMax tStep $numbs" }
@@ -786,16 +795,25 @@ proc 85readBody {datatype magic {defaultLen 0}} {
 			}
 
 			if {$datatype != 0x1B} {
-				hex	1 Reserved
+				section "Format flags" {
+					set Flags [hex 1]
+					sectionvalue $Flags
+					MaskRead $Flags 1 {1 DrawDot 0 DrawLine}
+					MaskRead $Flags 2 {1 SimulG 0 SeqG}
+					MaskRead $Flags 4 {1 GridOn 0 GridOff}
+					MaskRead $Flags 8 {1 PolarGC 0 RectGC}
+					MaskRead $Flags 16 {1 CoordsOff 0 CoordsOn}
+					MaskRead $Flags 32 {1 AxesOff 0 AxesOn}
+					MaskRead $Flags 64 {1 LabelOn 0 LabelOff}
+					# no GDB flag in windows
+					MaskRead $Flags 128 Reserved
+				}
 			}
 
 			foreach index $numbs {
 				read85Numb $index
 			}
 
-			if {$datatype == 0x17} {
-				bytes	20 Reserved
-			}
 			if {$datatype in {0x17 0x1B} && $magic == "**TI86**"} {
 				read85Numb xRes
 			}
@@ -857,19 +875,9 @@ proc Z80readBody {datatype {magic "**TI83F*"} {defaultLen 0}} {
 		0x0B { BAZIC [len_field Code] $magic }
 		0x05 -
 		0x06 {
-			set	datalen [len_field Code]
-			set	assembly 0
-			if {$datalen > 1} {
-				set	assembly [hex 2]
-				move	-2
-			}
-			if {[isAsm $assembly]} {
-				section -collapsed Code {
-					sectionvalue "\[expand for code]"
-					ReadAsm $assembly $datalen
-				}
-			} else {
-				BAZIC	$datalen $magic
+			set datalen [len_field Code]
+			if {![ReadAsm83 $datalen $magic]} {
+				BAZIC $datalen $magic
 			}
 		}
 		0x07 { bytes [len_field] "Data" }
@@ -1123,14 +1131,15 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-flash.tcl]]} {
 			$datatype == 0x0F && $magic == "**TI82**" ||
 			$datatype == 0x1D && $magic in {"**TI85**" "**TI86**"} ||
 			$datatype == 0x13 && $magic in {"**TI73**" "**TI83**" "**TI83F*"}} {
-				set	typeName "Backup"
+				set typeName "Backup"
 				len_field "Data 1"
-				entry	"Type" "[hex 1] (Backup)" 1 [expr [pos]-1]
+				entry "Type" "[hex 1] (Backup)" 1 [expr [pos]-1]
 				len_field "Data 2"
 				len_field "Data 3"
-				uint16	-hex "Address of data 2"
 				if {$magic == "**TI86**"} {
 					len_field "Data 4"
+				} else {
+					uint16 -hex "Address of data 2"
 				}
 			} else {
 				len_field
@@ -1166,11 +1175,20 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-flash.tcl]]} {
 
 		section "Body" {
 			if {$typeName=="Backup"} {
-				bytes	[len_field "Data 1"] "Data 1 \[RAM?\]"
-				bytes	[len_field "Data 2"] "Data 2 \[VAT\]"
-				bytes	[len_field "Data 3"] "Data 3 \[symTable\]"
+				set parts {{System data} {User data} {symTable}}
 				if {$magic == "**TI86**"} {
-					bytes	[len_field "Data 4"] "Data 4"
+					set parts {{System data} {User data} {User data, overflow} {symTable}}
+				}
+				set part 0
+				foreach label $parts {
+					incr part
+					set size [len_field "Data $part"]
+					set label "Data $part \[$label\]"
+					if {$size} {
+						bytes $size $label
+					} else {
+						entry $label ""
+					}
 				}
 			} elseif {$magic in {"**TI85**" "**TI86**"}} {
 				85readBody $datatype $magic [len_field]
