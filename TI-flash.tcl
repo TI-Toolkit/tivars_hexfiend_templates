@@ -363,10 +363,18 @@ proc getsection {} {
 
 section "Flash Header"
 
-entry "Version" "[format %x [uint8]].[format %x [uint8]]" 2 [expr [pos]-2]
+entry "BCD Version" "[format %x.%x [uint8] [uint8]]" 2 [expr [pos]-2]
+
+section -collapsed "Flags" {
+	set Flags [hex 1]
+	sectionvalue "$Flags ([MaskRead $Flags 1 {1 "Intel" 0 "Binary"}])"
+	MaskRead $Flags 254 Reserved
+}
 set binary [hex 1]
-entryd "Binary flag" $binary 1 [dict create 0x00 "Binary" 0x01 "Intel"]
-entryd "Object type" [hex 1] 1 [dict create 0x00 "!Z80" 0x88 "Z80"]
+entryd "Object type" $binary 1 [dict create 0x88 "Intel MCS object"]
+# both Flags%1 and Object Type must be set correctly to identify HEX format
+set binary [expr $binary == 0x88 && $Flags&1]
+
 hex 4 "Date" ;# supposed to be DDMMYYYY
 set namesize [uint8 "Name length"]
 entry "Name" "[ascii $namesize]" 31 [expr [pos]-$namesize]
@@ -374,13 +382,18 @@ move -$namesize
 move 31
 set a 0
 set b [pos]
+set OwnerIDs {
+	0x42 "CBL 2/LabPro" 0x43 TI-Presenter
+	0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x86 "TI-86"
+	0x88 "TI-92 Plus / Voyage 200" 0x98 "TI-89 \[Titanium]"}
 while {[uint8] != 0} {
 	move -1
 	incr a
-	entryd "Owner calc ID $a" [hex 1] 1 [dict create 0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x88 "TI-92 Plus" 0x98 "TI-89"]
+	set owner [hex 1]
+	entryd "Owner calc ID $a" $owner 1 $OwnerIDs
 	set recordtype [hex 1]
-	entryd "Type $a" $recordtype 1 $Z80typeDict
-	if {$a == 1} {set vartype $recordtype}
+	set c [entryd "Type $a" $recordtype 1 [TITypeDict $owner]]
+	if {$a == 1} {set vartype $c}
 }
 goto $b
 move 25
@@ -390,36 +403,46 @@ entry "Data size" $datasize 4 [expr [pos]-4]
 
 section	"Data" {
 	set	start [pos]
-	if {$vartype == 0x3E} { # License
-		ascii $datasize "Data"
-	} elseif {$binary} {
-		while {$start+$datasize>[pos]} {
-			set r [uint8]
-			move -1
-			if {$r != 58} {break}
-			readTIHex
-
-			if {[pos] >= $start+$datasize} {break}
-			set r [uint8]
-			if {$r == 13} {
-				if {[pos] < $start+$datasize} {
+	switch "$vartype" {
+		{Flash License} { ascii $datasize "Text" }
+		{OS} -
+		{Flash Application} -
+		{User Flash Application} -
+		{Certificate} {
+			if {$datasize == 131072} {
+				# only handled in prototypes
+				bytes $datasize Bootcode
+			} elseif {$binary} {
+				while {$start+$datasize>[pos]} {
 					set r [uint8]
-					if {$r != 10} {move -1}
+					move -1
+					if {$r != 58} {break}
+					readTIHex
+
+					if {[pos] >= $start+$datasize} {break}
+					set r [uint8]
+					if {$r == 13} {
+						if {[pos] < $start+$datasize} {
+							set r [uint8]
+							if {$r != 10} {move -1}
+						}
+					} elseif {$r != 10} {
+						move -1
+					} else {
+						break
+					}
 				}
-			} elseif {$r != 10} {
-				move -1
+				if {$start+$datasize > [pos]} {
+					ascii [expr $start+$datasize-[pos]] "Extended data"
+				}
 			} else {
-				break
+				sectionname "Certificate"
+				while {$start+$datasize>[pos]} {
+					getsection
+				}
 			}
 		}
-		if {$start+$datasize > [pos]} {
-			ascii [expr $start+$datasize-[pos]] "Extended data"
-		}
-	} else {
-		sectionname "Certificate"
-		while {$start+$datasize>[pos]} {
-			getsection
-		}
+		default { bytes $datasize "Data" }
 	}
 }
 

@@ -12,7 +12,7 @@
 # .92a, 92b, 92c, 92d, 92e, 92f, 92g, 92i, 92l, 92m, 92p, 92r, 92s, 92t, 92x, 92y,
 # .9xa, 9xc, 9xd, 9xe, 9xf, 9xg, 9xi, 9xl, 9xm, 9xp, 9xq, 9xr, 9xs, 9xt, 9xx, 9xy, 9xz,
 # .v2a, v2c, v2d, v2e, v2f, v2g, v2i, v2l, v2m, v2p, v2q, v2r, v2s, v2t, v2x, v2y, v2z,
-# .8cq, 8xq,
+# .8xq, 8cq, 8eq,
 # .73k, 8xk, 8ck, 8ek,
 # .73u, 82u, 89u, 8cu, 8eu, 8pu, 8xu, 8yu, 9xu, v2u,
 # .b83, b84, tig, tib,
@@ -77,8 +77,7 @@ proc ReadAsm83 {datalen {magic "**TI83F*"}} {
 	if {$datalen < 2} { return 0 }
 	set assembly [hex 2]
 	move -2
-	if {!(($magic == "**TI83F*" && $assembly in {0xBB6D 0xEF69 0xEF7B}) ||
-		($magic == "**TI73**" && $assembly == 0xBB6D))} { return 0 }
+	if {$magic != "**TI83F*" || $assembly ni {0xBB6D 0xEF69 0xEF7B}} { return 0 }
 	section -collapsed Code {
 		hex 2 "Asm token"
 		if {$datalen > 2} {
@@ -154,127 +153,83 @@ set	ProdIDs [dict create \
 	0x1B "TI-84 Plus T" \
 ]
 
-variable Z80typeDict [dict create \
-	0x00 "Real" \
-	0x01 "Real list" \
-	0x02 "Matrix" \
-	0x03 "Equation" \
-	0x04 "String" \
-	0x05 "Program" \
-	0x06 "Protected program" \
-	0x07 "Picture" \
-	0x08 "Graph database" \
-	0x0B "New equation" \
-	0x0C "Complex" \
-	0x0D "Complex list" \
-	0x0E "Undefined" \
-	0x0F "Window setup" \
-	0x10 "Zoom settings" \
-	0x11 "TableSet" \
-	0x12 "LCD / PrintScreen" \
-	0x13 "Backup" \
-	0x15 "AppVar" \
-	0x16 "Temporary" \
-	0x17 "Group" \
-	0x18 "Real Fraction" \
-	0x19 "Directory" \
-	0x1A "Image" \
-	0x1B "Complex Fraction" \
-	0x1C "Real radical" \
-	0x1D "Complex radical" \
-	0x1E "Complex pi" \
-	0x1F "Complex pi fraction" \
-	0x20 "Real pi" \
-	0x21 "Real pi fraction" \
-	0x23 "OS" \
-	0x24 "Flash app" \
-	0x25 "Certificate" \
-	0x26 "ID-List" \
-	0x27 "Certificate Memory" \
-	0x28 "Unit Certificate" \
-	0x29 "Clock" \
-	0x3E "Flash License" \
-]
-
-set	82typeDict [dict create \
-	0x0B "Window setup" \
-	0x0C "Recall Window" \
-	0x0D "TableSet" \
-	0x0F "Backup" \
-	0x1F "Group" \
-]
-
-variable 73typeDict [dict create \
-	0x0D "Categorical list" \
-	0x14 "Reduced simple fraction" \
-	0x15 "Reduced mixed fraction" \
-	0x16 "Simple fraction" \
-	0x17 "Mixed fraction" \
-	0x18 "Category" \
-	0x1A "AppVar" \
-	0x1B "Temporary" \
-]
-
-# 0x14 is `New Equation` on TI-86
-variable 85typeDict [dict create \
-	0x00 "Real" \
-	0x01 "Complex" \
-	0x02 "Real vector" \
-	0x03 "Complex vector" \
-	0x04 "Real list" \
-	0x05 "Complex list" \
-	0x06 "Real matrix" \
-	0x07 "Complex matrix" \
-	0x08 "Real constant" \
-	0x09 "Complex constant" \
-	0x0A "Equation" \
-	0x0C "String" \
-	0x0D "Function GDB" \
-	0x0E "Polar GDB" \
-	0x0F "Parametric GDB" \
-	0x10 "Differential GDB" \
-	0x11 "Picture" \
-	0x12 "Program" \
-	0x14 "LCD / PrintScreen" \
-	0x15 "Full Directory" \
-	0x17 "Function window" \
-	0x18 "Polar window" \
-	0x19 "Param window" \
-	0x1A "DifEq window" \
-	0x1B "Recall window" \
-	0x1D "Backup" \
-	0x1E "ScreenShot" \
-	0x1F "Group" \
-]
-
-set	68KtypeDict [dict create \
-	0x00 "Expression" \
-	0x04 "List" \
-	0x06 "Matrix" \
-	0x0A "Data" \
-	0x0B "Text" \
-	0x0C "String" \
-	0x0D "Graph database" \
-	0x0E "Figure" \
-	0x10 "Picture" \
-	0x12 "Program" \
-	0x13 "Function" \
-	0x14 "Macro" \
-	0x18 "Clock" \
-	0x19 "Full Directory" \
-	0x1A "Filter Directory" \
-	0x1B "Local Directory" \
-	0x1C "Appvar" \
-	0x1D "Backup" \
-	0x1E "Snapshot" \
-	0x1F "Folder" \
-	0x20 "Certificate Memory" \
-	0x21 "Assembly program" \
-	0x22 "ID-List" \
-	0x23 "OS" \
-	0x24 "App" \
-	0x25 "Certificate" \
-]
+proc TITypeDict {device} {
+	if {[string is integer -strict $device]} { set device [format 0x%02X $device] }
+	# 0x27 is the request ID for 0x25
+	set flash {
+		0x23 OS 0x24 {Flash Application} 0x25 Certificate 0x26 ID-List
+		0x27 {Certificate Memory} 0x28 {Unit Certificate}
+		0x3E {Flash License} 0xF0 Information
+	}
+	switch -exact -- $device {
+		**TI83** - 0x83 { return {
+			0x00 Real 0x01 {Real list} 0x02 Matrix 0x03 Equation
+			0x04 String 0x05 Program 0x06 {Protected program} 0x07 Picture
+			0x08 {Graph database} 0x0B {New equation} 0x0C Complex
+			0x0D {Complex list} 0x0E Undefined 0x0F {Window setup}
+			0x10 {Zoom settings} 0x11 TableSet 0x12 ScreenShot
+			0x13 Backup 0x19 Directory 0x1E Nonexistent
+		} }
+		**TI83F* - 0x73 {
+			return [dict merge [dict remove [TITypeDict 0x83] 0x1E] $flash {
+				0x15 AppVar 0x16 Temporary 0x17 Group 0x18 {Real Fraction}
+				0x1A Image 0x1B {Complex Fraction} 0x1C {Real radical}
+				0x1D {Complex radical} 0x1E {Complex pi} 0x1F {Complex pi fraction}
+				0x20 {Real pi} 0x21 {Real pi fraction} 0x29 Clock
+			}]
+		}
+		**TI82** - 0x82 {
+			return [dict merge [dict remove [TITypeDict 0x83] \
+				0x04 0x10 0x11 0x13 0x19 0x1E] {
+				0x0B {Window setup} 0x0C {Recall Window} 0x0D TableSet
+				0x0F Backup 0x1F Group
+			}]
+		}
+		**TI73** - 0x74 {
+			return [dict merge [dict remove [TITypeDict 0x83] \
+				0x02 0x08 0x0C 0x10 0x1E] $flash {
+				0x0D {Categorical list} 0x14 {Reduced simple fraction}
+				0x15 {Reduced mixed fraction} 0x16 {Simple fraction}
+				0x17 {Mixed fraction} 0x18 Category 0x1A AppVar 0x1B Temporary
+			}]
+		}
+		**TI85** - 0x85 { return {
+			0x00 Real 0x01 Complex 0x02 {Real vector} 0x03 {Complex vector}
+			0x04 {Real list} 0x05 {Complex list} 0x06 {Real matrix}
+			0x07 {Complex matrix} 0x08 {Real constant} 0x09 {Complex constant}
+			0x0A Equation 0x0C String 0x0D {Function GDB} 0x0E {Polar GDB}
+			0x0F {Parametric GDB} 0x10 {Differential GDB} 0x11 Picture
+			0x12 Program 0x14 ScreenShot 0x15 {Full Directory}
+			0x17 {Function range} 0x18 {Polar range} 0x19 {Param range}
+			0x1A {DifEq range} 0x1B {User zoom range} 0x1D Backup
+			0x1E ScreenShot 0x1F Group
+		} }
+		**TI86** - 0x86 {
+			return [dict merge [TITypeDict 0x85] {
+				0x14 {New equation} 0x16 OS 0x92 {Protected program}
+			}]
+		}
+		**TI92** - 0x89 { return {
+			0x00 Expression 0x04 List 0x06 Matrix 0x0A Data 0x0B Text
+			0x0C String 0x0D {Graph database} 0x0E Figure 0x10 Picture
+			0x12 Program 0x13 Function 0x14 Macro 0x19 {Full Directory}
+			0x1B {Local Directory} 0x1D Backup 0x1E {Screen Snapshot} 0x1F Folder
+		} }
+		**TI89** - **TI92P* - 0x98 - 0x88 {
+			return [dict merge [TITypeDict 0x89] [dict remove $flash 0x26 0x27 0x28] {
+				0x18 Clock 0x1A {Filter Directory} 0x1C AppVar
+				0x20 {Certificate Memory} 0x21 {Assembly Program} 0x22 ID-List 0x24 {Flash Application}
+			}]
+		}
+		0x42 { return {
+			0x07 String 0x08 List 0x0A Setup 0x0D {Normal data list}
+			0x1F {Full Directory} 0x23 OS 0x29 {User Flash Application}
+			0x2A {Archive record} 0xF0 Information
+		} }
+		0x43 { return {0x1F {Full Directory} 0x23 OS 0xF0 Information} }
+		default { return {} }
+	}
+}
 
 # 0x11 is only seen in TI's py2appvar 1.2.1+
 proc ReadVer {} {
@@ -313,7 +268,6 @@ proc ReadAxes {is86} {
 proc read85Numb {{index ""}} {
 	section -collapsed Number\ $index
 	proc internalNumber {recursed} {
-		variable 85typeDict
 		section -collapsed [expr $recursed?"Complex":"Real"]
 		section -collapsed "Flags" {
 			set	Flags [hex 1]
@@ -321,7 +275,7 @@ proc read85Numb {{index ""}} {
 			if {$Flags == 255} {
 				sectionvalue $Flags\ (Undefined)
 			} else {
-				sectionvalue $Flags\ ([entryd "Type" $type 1 $85typeDict])
+				sectionvalue $Flags\ ([entryd "Type" $type 1 [TITypeDict 0x85]])
 				MaskRead $Flags 32 Unknown
 				MaskRead $Flags 64 {1 "Used in last graph" 0 "Not used in last graph"}
 				MaskRead $Flags 128 {1 Negative 0 Positive}
@@ -353,16 +307,14 @@ proc read85Numb {{index ""}} {
 }
 
 proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
-	variable 73typeDict
 	section -collapsed Number\ $index
 
-	proc readTIFloat {recursed} {
-		variable Z80typeDict
+	proc readTIFloat {recursed magic} {
 		section -collapsed [expr $recursed?"Complex":"Real"]
 		section -collapsed "Flags" {
 			set	Flags [hex 1]
 			set	type [format "0x%02X" [expr $Flags & 63]]
-			sectionvalue $Flags\ ([entryd "Type" $type 1 $Z80typeDict])
+			sectionvalue $Flags\ ([entryd "Type" $type 1 [TITypeDict $magic]])
 			MaskRead $Flags 64 {1 "Used in last graph" 0 "Not used in last graph"}
 			MaskRead $Flags 128 {1 Negative 0 Positive}
 		}
@@ -390,7 +342,7 @@ proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 		sectionvalue $n
 		endsection
 		if {!$recursed && $type in {0x0C 0x1B 0x1D 0x1E 0x1F}} {
-			set n "$n + [readTIFloat 1]i"
+			set n "$n + [readTIFloat 1 $magic]i"
 		}
 		sectionvalue $n
 		return $n
@@ -405,7 +357,7 @@ proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 		move	-8
 		section -collapsed "Flags" {
 			set	type [format "0x%02X" [expr $a & 63]]
-			sectionvalue $a\ ([entryd "Type" $type 1 $73typeDict])
+			sectionvalue $a\ ([entryd "Type" $type 1 [TITypeDict 0x74]])
 			MaskRead $a 64 {1 "Used in last graph" 0 "Not used in last graph"}
 			MaskRead $a 128 {1 Negative 0 Positive}
 		}
@@ -430,13 +382,12 @@ proc readZ80Numb {{index ""} {magic "**TI83F*"}} {
 		sectionvalue $n
 	} else {
 		move	-9
-		readTIFloat 0
+		readTIFloat 0 $magic
 	}
 	endsection
 }
 
 proc readGDB {} {
-	variable Z80typeDict
 	set	datalen [len_field]
 	set	start [pos]
 	set	isn82 ![int8]
@@ -510,7 +461,7 @@ proc readGDB {} {
 			section -collapsed "Flags" {
 				set	Flags [hex 1]
 				sectionvalue "$Flags - [expr $Flags & 32?"S":"Uns"]elected"
-				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 $Z80typeDict
+				entryd	"Type" [format "0x%02X" [expr $Flags & 31]] 1 [TITypeDict 0x73]
 				MaskRead $Flags 32 {1 Selected 0 Unselected}
 				MaskRead $Flags 64 {1 "Used in last graph" 0 "Not used in last graph"}
 				MaskRead $Flags 128 {1 "Link transfer flag" 0 "!Link transfer flag"}
@@ -983,7 +934,6 @@ proc getNameZ80 {title type length {magic ""}} {
 }
 
 proc SysTab {size magic} {
-	variable Z80typeDict
 	set	EntryStart [pos]
 	section Entry
 
@@ -993,7 +943,7 @@ proc SysTab {size magic} {
 		set	Flags [hex 1]
 		# legacy Z80 equations use bit 5 for selection
 		set	type [format "0x%02X" [expr $Flags & (($Flags & 23) == 3?31:63)]]
-		set	typename [entryd "Type" $type 1 $Z80typeDict]
+		set	typename [entryd "Type" $type 1 [TITypeDict $magic]]
 		sectionvalue $Flags\ ($typename)
 		if {($Flags & 23) == 3} {
 			MaskRead $Flags 32 {1 "Selected Z80" 0 "Unselected Z80"}
@@ -1071,7 +1021,7 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-flash.tcl]]} {
 			set	datatype [hex 1]
 			move	-9
 			set	name [ascii 8 [expr $datatype==0x1D?"ROM version":"Name"]]
-			set	typeName [entryd "Type" [hex 1] 1 $68KtypeDict]
+			set	typeName [entryd "Type" [hex 1] 1 [TITypeDict $magic]]
 			# Backup attributes are allegedly only used by TiLP in TI-89 "backup groups"
 			# https://github.com/debrouxl/tilibs/blob/master/libtifiles/trunk/src/tifiles.h#L69-L72
 			entryd	Attribute [hex 1] 1 [dict create 0x01 Locked 0x02 Protected 0x03 Archived 0x1D "Backup none" 0x26 "Backup Locked" 0x27 "Backup Archived"]
@@ -1112,20 +1062,20 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-flash.tcl]]} {
 	uint32	"File length"
 	hex	2 "Body section magic"
 } elseif {$magic in {"**TI73**" "**TI82**" "**TI83**" "**TI83F*" "**TI85**" "**TI86**"}} {
-	hex	2 "Descriptor"
-	entryd	"Owner prod ID" [hex 1] 1 $ProdIDs
-	ascii	42 "Comment"
-	set	filesize [len_field Variables]
+	hex 2 "Descriptor"
+	entryd "Owner prod ID" [hex 1] 1 $ProdIDs
+	ascii 42 "Comment"
+	set filesize [len_field Variables]
 	section "Variables"
 	whiless $filesize {
 		section Entry
-		set	name ""
-		set	typeName ""
-		set	bodyOffset [uint16 "Body offset"]
-		set	headStart [pos]
+		set name ""
+		set typeName ""
+		set bodyOffset [uint16 "Body offset"]
+		set headStart [pos]
 		int16
-		set	datatype [hex 1]
-		move	-3
+		set datatype [hex 1]
+		move -3
 		section "Metadata" {
 			if {
 			$datatype == 0x0F && $magic == "**TI82**" ||
@@ -1143,33 +1093,26 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-flash.tcl]]} {
 				}
 			} else {
 				len_field
-				set	a $Z80typeDict
-				if {[dict exists $82typeDict [hex 1]] && $magic=="**TI82**"} {
-					set	a $82typeDict
-				}
-				if {[dict exists $73typeDict $datatype] && $magic=="**TI73**"} {
-					set	a $73typeDict
-				}
 				if {$magic in {"**TI85**" "**TI86**"}} {
-					set	typeName [entryd "Type" $datatype 1 $85typeDict]
-					set	namelen [uint8 Name\ length]
+					set typeName [entryd "Type" [hex 1] 1 [TITypeDict $magic]]
+					set namelen [uint8 Name\ length]
 					if $namelen {
-						set	name [string map {\xC1 θ} [ascii $namelen]]
-						entry	Name $name $namelen [expr [pos]-$namelen]
+						set name [string map {\xC1 θ} [ascii $namelen]]
+						entry Name $name $namelen [expr [pos]-$namelen]
 					} else {
-						entry	Name ""
+						entry Name ""
 					}
 				} else {
-					set	typeName [entryd "Type" $datatype 1 $a]
-					set	name [getNameZ80 Name $datatype 8 $magic]
+					set typeName [entryd "Type" [hex 1] 1 [TITypeDict $magic]]
+					set name [getNameZ80 Name $datatype 8 $magic]
 					if {$bodyOffset > 11} {
 						ReadVer
-						set	a [hex 1]
-						entry	Archived $a\ [expr $a?"(A":"(Una"]rchived) 1 [expr [pos]-1]
+						set a [hex 1]
+						entry Archived $a\ [expr $a?"(A":"(Una"]rchived) 1 [expr [pos]-1]
 					}
 				}
 				# some TI-86 files include [garbage] name padding
-				goto	[expr $bodyOffset + $headStart]
+				goto [expr $bodyOffset + $headStart]
 			}
 		}
 
@@ -1204,8 +1147,11 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-flash.tcl]]} {
 	endsection
 	CheckSum 55 [pos]
 } elseif {$magic=="**TI81**"} {
-	set type [hex 2]
-	entryd "Type" $type 2 {0x000B MEM 0x006E PRGM}
+	# NUL-terminated magic on DOS; ignored on Mac
+	hex 1 NUL
+	set type [hex 1]
+	# decimal 11 and 110 :thinking:
+	entryd "Type" $type 1 {0x0B MEM 0x6E PRGM}
 	if {$type == 0x6E} {
 		set size [len_field Code]
 		set name ""
@@ -1217,8 +1163,11 @@ if {$magic=="**TIFL**" && [file exists [file join $CurDir TI-flash.tcl]]} {
 		entry Name $name 8 [expr [pos]-8]
 		BAZIC81 $size
 		CheckSum 12 [pos]
-	} elseif {$type == 0xB} {
-		bytes 8182 Data
+	} elseif {$type == 0xB && [len] == 0x2000} {
+		bytes 454 {Prefix padding}
+		bytes 7728 State
+	} else {
+		bytes eof Data
 	}
 } elseif {[string range $magic 0 3]=="PK\x03\x04"} {
 	# Bundles include a _CHECKSUM file with the sum of CRC32 of all files (lowercase, not zero-padded, ends with CRLF)
