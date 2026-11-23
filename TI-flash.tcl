@@ -5,9 +5,9 @@
 
 proc uint24l {a {b -1}} {
 	if {$b==-1} {
-		entry	$a [format "0x%06X" [uint24]] 3 [expr [pos]-3]
+		entry $a [format "0x%06X" [uint24]] 3 [expr [pos]-3]
 	} else {
-		entry	$a [format "0x%06X" $b] 3 [expr [pos]-3]
+		entry $a [format "0x%06X" $b] 3 [expr [pos]-3]
 	}
 }
 
@@ -128,6 +128,7 @@ proc Field_Names {value} {
 		020	{ set x "Date signature" }
 		022	{ set x "CSE signature" }
 		023	{ set x "CE signature" }
+		024	{ set x "CE quick-signature" }
 		032	{ set x "Date stamp" }
 		033	{ set x "Certificate parent" }
 		034	{ set x "Exam LED available" }
@@ -200,7 +201,7 @@ proc readAsciiHex {size {name ""}} {
 	set a [pos]
 	set b 0x[ascii [expr 2*$size]]
 	if {$name ne ""} {
-		entry	$name $b [expr 2*$size] $a
+		entry $name $b [expr 2*$size] $a
 	}
 	return $b
 }
@@ -208,20 +209,17 @@ proc readAsciiHex {size {name ""}} {
 proc readTIHex {} {
 	section "TI-Hex record" {
 		uint8
-		set	size [readAsciiHex 1 Size]
-
-		set	address [readAsciiHex 2 Address]
-
-		set	type [readAsciiHex 1]
-		entryd	"Record type" $type 2 [dict create 0x00 Data 0x01 EOF 0x02 Page]
+		set size [readAsciiHex 1 Size]
+		set address [readAsciiHex 2 Address]
+		set type [readAsciiHex 1]
+		entryd "Record type" $type 2 [dict create 0x00 Data 0x01 EOF 0x02 Page]
 		if {!$type} {sectioncollapse}
-
 		if {$size != 0} {
 			readAsciiHex $size Data
 		}
 		readAsciiHex 1 Checksum
 	}
-	return	$type
+	return $type
 }
 
 proc readExtendedFormat {fieldSize} {
@@ -267,7 +265,7 @@ proc readExtendedFormat {fieldSize} {
 			goto [expr $start + $copy]
 			set copys [cstr ascii]
 			goto $a
-			entry Copyright [format "0x%06X $s" $copy $copys] 3 [expr [pos]-3]
+			entry Copyright [format "0x%06X %s" $copy $copys] 3 [expr [pos]-3]
 			uint24l "Reserved"
 		}
 		section -collapsed "Relocation table" {
@@ -328,36 +326,32 @@ proc readExtendedFormat {fieldSize} {
 	}
 }
 
-proc getsection {} {
-	set	field [hex 2]
-	set	field_id [format "%03X" [expr $field>>4]]
-	set	field_size [expr $field & 15]
-	section	[Field_Names $field_id] {
-		entry	"Field" $field_id 2 [expr [pos]-2]
-		set	field_size_2 [Get_Field_Size $field_size]
+proc readCertField {} {
+	set field [hex 2]
+	set field_id [format "%03X" [expr $field>>4]]
+	set field_size [expr $field & 15]
+	section [Field_Names $field_id] {
+		entry "Field" $field_id 2 [expr [pos]-2]
+		set field_size_ext [Get_Field_Size $field_size]
 
-		if {$field_size_2 != 0} {
+		if {$field_size_ext != 0} {
 			if {$field_id in {800 810 032}} {
-				set a 0
-				while {$a < $field_size_2} {
-					incr a [getsection]
+				set a [expr [pos]+$field_size_ext]
+				while {$a > [pos]} {
+					readCertField
 				}
 			} elseif {$field_id == 817} {
-				readExtendedFormat $field_size_2
-			} elseif {$field_id == "090" && $field_size_2 == 4} {
+				readExtendedFormat $field_size_ext
+			} elseif {$field_id == "090" && $field_size_ext == 4} {
 				# 68k and eZ80 are both big-endian
 				set a [hex 4]
 				set date [clock format [expr $a+852076800] -timezone :UTC -format "%Y-%m-%d %H:%M:%S"]
 				entry Data $a\ ($date) 4 [expr [pos]-4]
 			} else {
-				hex	$field_size_2 "Data"
+				hex $field_size_ext "Data"
 			}
 		}
-
-		incr	field_size 2
-		incr	field_size $field_size_2
 	}
-	return	$field_size
 }
 
 
@@ -368,23 +362,24 @@ entry "BCD Version" "[format %x.%x [uint8] [uint8]]" 2 [expr [pos]-2]
 section -collapsed "Flags" {
 	set Flags [hex 1]
 	sectionvalue "$Flags ([MaskRead $Flags 1 {1 "Intel" 0 "Binary"}])"
-	MaskRead $Flags 254 Reserved
+	MaskRead $Flags 254 Unused
 }
-set binary [hex 1]
-entryd "Object type" $binary 1 [dict create 0x88 "Intel MCS object"]
-# both Flags%1 and Object Type must be set correctly to identify HEX format
-set binary [expr $binary == 0x88 && $Flags&1]
+set objType [hex 1]
+entryd "Object type" $objType 1 [dict create 0x88 "Intel MCS object"]
+# both Flags&1 must be set and Object Type must be 0x88 to identify HEX format
+set isIntelHex [expr $objType == 0x88 && $Flags & 1]
 
 hex 4 "Date" ;# supposed to be DDMMYYYY
 set namesize [uint8 "Name length"]
-entry "Name" "[ascii $namesize]" 31 [expr [pos]-$namesize]
+entry "Name" [if {$namesize} {ascii $namesize}] 31 [expr {[pos] - $namesize}]
 move -$namesize
 move 31
+
 set a 0
 set b [pos]
 set OwnerIDs {
 	0x42 "CBL 2/LabPro" 0x43 TI-Presenter
-	0x73 "TI-8\[34] Plus" 0x74 "TI-73" 0x86 "TI-86"
+	0x73 "TI-8\[34] Plus" 0x74 "TI-73 \[Explorer]" 0x86 "TI-86"
 	0x88 "TI-92 Plus / Voyage 200" 0x98 "TI-89 \[Titanium]"}
 while {[uint8] != 0} {
 	move -1
@@ -402,7 +397,7 @@ set datasize [uint32]
 entry "Data size" $datasize 4 [expr [pos]-4]
 
 section	"Data" {
-	set	start [pos]
+	set start [pos]
 	switch "$vartype" {
 		{Flash License} { ascii $datasize "Text" }
 		{OS} -
@@ -412,7 +407,9 @@ section	"Data" {
 			if {$datasize == 131072} {
 				# only handled in prototypes
 				bytes $datasize Bootcode
-			} elseif {$binary} {
+			} elseif {$isIntelHex} {
+# TI-Connect reads exactly DataSize physical bytes, even if that cuts a HEX record short.
+# TiLP checks DataSize's range, then reads HEX blocks without enforcing the declared end.
 				while {$start+$datasize>[pos]} {
 					set r [uint8]
 					move -1
@@ -428,17 +425,13 @@ section	"Data" {
 						}
 					} elseif {$r != 10} {
 						move -1
-					} else {
 						break
 					}
-				}
-				if {$start+$datasize > [pos]} {
-					ascii [expr $start+$datasize-[pos]] "Extended data"
 				}
 			} else {
 				sectionname "Certificate"
 				while {$start+$datasize>[pos]} {
-					getsection
+					readCertField
 				}
 			}
 		}
@@ -448,25 +441,25 @@ section	"Data" {
 
 # optional checksum
 if {[len]-[pos] == 2} {
-	uint16 "Checksum"
+	hex 2 "Checksum"
 } elseif {[len]-[pos] >= 80} {
-	move	2
-	set	r [ascii 8]
-	move	-10
-	if {$r=="**TIFL**"} {uint16 "Checksum"}
+	move 2
+	set r [ascii 8]
+	move -10
+	if {$r=="**TIFL**"} {hex 2 "Checksum"}
 }
 
 endsection ;# Flash Header
 
-#read multiple FLASH headers, only one basecode/application allowed per physical file
+# read multiple FLASH headers, only one basecode/application allowed per physical file
 if {[len]-[pos] >= 78} {
 	if {[ascii 8]=="**TIFL**"} {
 		move -8
 		ascii 8 Magic
 		source [info script]
-	}
+	} else { move -8 }
 }
 
 if {![end]} {
-	bytes	eof "Extra Data"
+	bytes eof "Extra Data"
 }

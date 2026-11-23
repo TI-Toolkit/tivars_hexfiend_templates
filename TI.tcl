@@ -12,9 +12,9 @@
 # .92a, 92b, 92c, 92d, 92e, 92f, 92g, 92i, 92l, 92m, 92p, 92r, 92s, 92t, 92x, 92y,
 # .9xa, 9xc, 9xd, 9xe, 9xf, 9xg, 9xi, 9xl, 9xm, 9xp, 9xq, 9xr, 9xs, 9xt, 9xx, 9xy, 9xz,
 # .v2a, v2c, v2d, v2e, v2f, v2g, v2i, v2l, v2m, v2p, v2q, v2r, v2s, v2t, v2x, v2y, v2z,
-# .8xq, 8cq, 8eq,
-# .73k, 8xk, 8ck, 8ek,
-# .73u, 82u, 89u, 8cu, 8eu, 8pu, 8xu, 8yu, 9xu, v2u,
+# .8cq, 8eq, 8xq,
+# .73k, 8ck, 8ek, 8xk, 89k, 9xk,
+# .73u, 82u, 86u, 89u, 8cu, 8eu, 8pu, 8xu, 8yu, 9xu, v2u,
 # .b83, b84, tig, tib,
 # .8ca, 8cb, 8cg, 8ci, 8xidl);
 
